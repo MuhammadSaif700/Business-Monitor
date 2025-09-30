@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pandas
+sqlalchemy
+alembic
+python-dotenv
+openai
+requests
+jinja2
+PyJWT
+prometheus-client
+sentry-sdk
+google-generativeai
+bcrypt
+email-validator
