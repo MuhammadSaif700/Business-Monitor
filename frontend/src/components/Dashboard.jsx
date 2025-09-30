@@ -13,9 +13,31 @@ import remarkGfm from 'remark-gfm'
 export default function Dashboard(){
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  // activeDataset is null on page load so dashboard stays empty until user selects/uploads
-  const [activeDataset, setActiveDataset] = useState(null)
+  // Controls whether the dashboard should automatically load the latest dataset
+  // Keep false on fresh page loads so the dashboard is empty until user opts in
+  const [allowAutoLoad, setAllowAutoLoad] = useState(false)
   const toast = useToast()
+
+  // Clear local dashboard/chat history on mount so the UI is fresh on every page load
+  React.useEffect(() => {
+    try {
+      localStorage.removeItem('ai_dashboard_history_v1')
+      localStorage.removeItem('ai_chat_history_v1')
+    } catch (e) {
+      // ignore
+    }
+  }, [])
+
+  // If the upload flow set a flag to auto-load the latest dataset, enable it once
+  React.useEffect(() => {
+    try {
+      const v = localStorage.getItem('allow_auto_load')
+      if (v === '1') {
+        setAllowAutoLoad(true)
+        localStorage.removeItem('allow_auto_load')
+      }
+    } catch (e) {}
+  }, [])
 
   // Summary query (fallback for business data)
   const { data: summary } = useQuery({
@@ -44,18 +66,22 @@ export default function Dashboard(){
     staleTime: 30_000,
   })
 
-  // Smart analytics based on an explicitly selected dataset. Do NOT auto-run on page load.
+  // Smart analytics based on uploaded data
   const { data: smartAnalytics } = useQuery({
-    queryKey: ['smart-analytics', activeDataset?.table_name, { startDate, endDate }],
+    queryKey: ['smart-analytics', datasets, { startDate, endDate }],
     queryFn: async () => {
-      if (!activeDataset) {
-        console.log('Smart Analytics: No active dataset selected')
+      if (!datasets || datasets.length === 0) {
+        console.log('Smart Analytics: No datasets available')
         return null
       }
-      console.log('Smart Analytics: Using dataset', activeDataset.table_name)
+      
+      // Use the most recent dataset for analysis
+      const latestDataset = datasets[0]
+      console.log('Smart Analytics: Using dataset', latestDataset.table_name)
+      
       try {
         const res = await api.post('/analytics/smart-dashboard', {
-          table_name: activeDataset.table_name,
+          table_name: latestDataset.table_name,
           start_date: startDate || undefined,
           end_date: endDate || undefined
         })
@@ -71,70 +97,73 @@ export default function Dashboard(){
         return null
       }
     },
-    enabled: !!activeDataset,
+    // Only run smart analytics when the user has explicitly allowed auto-loading
+    enabled: allowAutoLoad && !!(datasets && datasets.length > 0),
     staleTime: 60_000,
   })
 
   // Chart queries via AI endpoint (cached separately)
   const { data: salesResp, isLoading: salesLoading } = useQuery({
-    queryKey: ['ai','sales_over_time', activeDataset?.table_name, { startDate, endDate }],
+    queryKey: ['ai','sales_over_time', { startDate, endDate }],
     queryFn: async () => {
-      const params = { query: 'sales_over_time', start_date: startDate || undefined, end_date: endDate || undefined, table_name: activeDataset?.table_name }
+      const params = { query: 'sales_over_time', start_date: startDate || undefined, end_date: endDate || undefined }
       const res = await api.get('/ai/query', { params })
       return res.data
     },
-    enabled: !!activeDataset,
     staleTime: 60_000,
+    enabled: allowAutoLoad,
   })
   const salesData = salesResp?.data
   const salesNarrative = salesResp?.narrative || ''
   const salesAiError = salesResp?.ai_error
 
   const { data: profitResp, isLoading: profitLoading } = useQuery({
-    queryKey: ['ai','most_profitable_product', activeDataset?.table_name, { startDate, endDate }],
+    queryKey: ['ai','most_profitable_product', { startDate, endDate }],
     queryFn: async () => {
-      const params = { query: 'most_profitable_product', start_date: startDate || undefined, end_date: endDate || undefined, table_name: activeDataset?.table_name }
+      const params = { query: 'most_profitable_product', start_date: startDate || undefined, end_date: endDate || undefined }
       const res = await api.get('/ai/query', { params })
       return res.data
     },
-    enabled: !!activeDataset,
     staleTime: 60_000,
+    enabled: allowAutoLoad,
   })
   const profitData = profitResp?.data
   const profitNarrative = profitResp?.narrative || ''
   const profitAiError = profitResp?.ai_error
 
   const { data: regionResp, isLoading: regionLoading } = useQuery({
-    queryKey: ['ai','by_region', activeDataset?.table_name, { startDate, endDate }],
+    queryKey: ['ai','by_region', { startDate, endDate }],
     queryFn: async () => {
-      const params = { query: 'by_region', start_date: startDate || undefined, end_date: endDate || undefined, table_name: activeDataset?.table_name }
+      const params = { query: 'by_region', start_date: startDate || undefined, end_date: endDate || undefined }
       const res = await api.get('/ai/query', { params })
       return res.data
     },
-    enabled: !!activeDataset,
     staleTime: 60_000,
+    enabled: allowAutoLoad,
   })
   const regionData = regionResp?.data
   const regionNarrative = regionResp?.narrative || ''
   const regionAiError = regionResp?.ai_error
 
   const { data: customerResp, isLoading: customerLoading } = useQuery({
-    queryKey: ['ai','by_customer', activeDataset?.table_name, { startDate, endDate }],
+    queryKey: ['ai','by_customer', { startDate, endDate }],
     queryFn: async () => {
-      const params = { query: 'by_customer', start_date: startDate || undefined, end_date: endDate || undefined, table_name: activeDataset?.table_name }
+      const params = { query: 'by_customer', start_date: startDate || undefined, end_date: endDate || undefined }
       const res = await api.get('/ai/query', { params })
       return res.data
     },
-    enabled: !!activeDataset,
     staleTime: 60_000,
+    enabled: allowAutoLoad,
   })
   const customerData = customerResp?.data
   const customerNarrative = customerResp?.narrative || ''
   const customerAiError = customerResp?.ai_error
   const loadingCharts = salesLoading || profitLoading || regionLoading || customerLoading
 
-  const hasBusinessData = summary && (summary.total_sales || summary.total_purchases)
-  const hasSmartData = smartAnalytics && smartAnalytics.kpis
+  // Only consider business/smart data present if the user allowed auto-loading.
+  // This ensures the dashboard remains empty on a fresh page load.
+  const hasBusinessData = allowAutoLoad && summary && (summary.total_sales || summary.total_purchases)
+  const hasSmartData = allowAutoLoad && smartAnalytics && smartAnalytics.kpis
   // Do NOT auto-select a dataset on page load - keep dashboard empty until user uploads/selects
   const activeDataset = null
 
@@ -224,14 +253,14 @@ export default function Dashboard(){
               smartAnalytics.kpis.slice(0,1).map((k,i)=>(<KPI key={i} title={k.title} value={k.value} trend={k.trend} />))
             )}
           </>
-        ) : activeDataset ? (
+  ) : (activeDataset && allowAutoLoad) ? (
           <>
             <KPI title="Dataset" value={activeDataset.original_filename} />
             <KPI title="Rows" value={activeDataset.row_count?.toLocaleString() || '—'} />
             <KPI title="Columns" value={activeDataset.columns?.length || '—'} />
             <KPI title="Uploaded" value={new Date(activeDataset.upload_timestamp).toLocaleDateString()} />
           </>
-        ) : (
+          ) : (
           <>
             <KPI title="Total Files" value={datasets?.length || 0} />
             <KPI title="Status" value="No Data" />
@@ -260,24 +289,6 @@ export default function Dashboard(){
         </div>
 
         <div className="date-filter">
-          {/* Dataset selector: user must explicitly pick a dataset to populate dashboard */}
-          <div className="flex items-center gap-2">
-            <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Dataset</label>
-            <select
-              value={activeDataset?.table_name || ''}
-              onChange={e => {
-                const tbl = e.target.value
-                const found = datasets?.find(d => d.table_name === tbl) || null
-                setActiveDataset(found)
-              }}
-              className="date-input"
-            >
-              <option value="">-- select dataset --</option>
-              {datasets?.map(ds => (
-                <option key={ds.table_name} value={ds.table_name}>{ds.original_filename}</option>
-              ))}
-            </select>
-          </div>
           <div className="flex items-center gap-2">
             <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">From</label>
             <input
@@ -413,7 +424,7 @@ export default function Dashboard(){
                 </ChartCard>
               ))}
             </div>
-          ) : activeDataset ? (
+          ) : (activeDataset && allowAutoLoad) ? (
             <div className="grid md:grid-cols-2 gap-6">
               <div className="panel p-6 flex flex-col justify-between gap-4">
                 <div>
@@ -449,6 +460,15 @@ export default function Dashboard(){
                 <Link to="/upload" className="btn btn-primary">📤 Upload a file</Link>
                 <Link to="/designer" className="btn btn-secondary">🤖 Try AI Designer</Link>
               </div>
+              {/* If there are existing files on the server, offer a one-click option to load them */}
+              {datasets && datasets.length > 0 && !allowAutoLoad && (
+                <div className="mt-6">
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">We found uploaded files on your account. Click to load the latest dataset into this dashboard.</p>
+                  <div className="flex justify-center">
+                    <button onClick={() => setAllowAutoLoad(true)} className="btn btn-outline">Load latest dataset</button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

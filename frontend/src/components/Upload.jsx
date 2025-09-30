@@ -1,5 +1,6 @@
 import React, {useState} from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useToast } from './ToastProvider'
 
@@ -10,6 +11,7 @@ export default function Upload(){
   const [isUploading, setIsUploading] = useState(false)
   const toast = useToast()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
   const resetData = async () => {
     const ok = window.confirm('This will delete ALL transactions. Continue?')
@@ -60,6 +62,12 @@ export default function Upload(){
           queryClient.invalidateQueries({ queryKey: ['datasets'], exact: false }),
         ])
       }catch(_){}
+
+      // Signal dashboard to auto-load the newly uploaded dataset and navigate there
+      try {
+        localStorage.setItem('allow_auto_load', '1')
+      } catch (e) { /* noop */ }
+      navigate('/')
       
       // Clear file input
       setFile(null)
