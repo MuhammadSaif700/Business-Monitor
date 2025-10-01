@@ -76,7 +76,7 @@ export default function App(){
         )}
 
         <div className="flex h-screen overflow-hidden">
-          <div className={	ransform transition-transform duration-300 ease-in-out lg:translate-x-0 }>
+          <div className="transform transition-transform duration-300 ease-in-out lg:translate-x-0">
             <Sidebar 
               token={token} 
               onClose={() => setSidebarOpen(false)} 

@@ -70,7 +70,7 @@ export default function AIChat({ compact = false }){
     'What product drove the most profit last month?'
   ]
 
-  const outerClass = compact ? 'panel p-0 overflow-hidden max-w-md' : 'panel p-0 overflow-hidden'
+  const outerClass = compact ? 'w-full' : 'panel p-0 overflow-hidden'
   const headerClass = compact ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white px-4 py-3' : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white px-6 py-5'
 
   return (
@@ -79,26 +79,27 @@ export default function AIChat({ compact = false }){
         <h3 className={compact ? 'text-sm font-semibold' : 'text-lg font-semibold'}>AI Insights Assistant</h3>
         {!compact && <p className="text-sm opacity-80 mt-1">Ask questions in plain language and get instant, data-backed answers.</p>}
       </div>
-      <div className={compact ? 'p-3 space-y-3' : 'p-6 space-y-5'}>
+      <div className={compact ? 'space-y-4 p-4' : 'p-6 space-y-5'}>
         <div className="space-y-3">
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
             <input
               value={query}
               onChange={e=>setQuery(e.target.value)}
-              className="input flex-1"
+              onKeyDown={e => e.key === 'Enter' && ask()}
+              className="input flex-1 text-sm"
               placeholder="e.g. Which region performed best last quarter?"
             />
             <button
               onClick={ask}
-              className="btn btn-primary min-w-[120px]"
+              className="btn btn-primary min-w-[100px] sm:min-w-[120px] shrink-0"
               disabled={!query || loading}
             >
               {loading ? 'Thinking…' : 'Ask' }
             </button>
           </div>
-          <div className="flex flex-wrap gap-2 text-xs">
+          <div className="flex flex-wrap gap-2">
             {suggestions.map(s => (
-              <button key={s} onClick={()=>setQuery(s)} className="btn-outline text-xs px-3 py-1.5">
+              <button key={s} onClick={()=>setQuery(s)} className="btn-outline text-xs px-3 py-2 whitespace-normal text-left">
                 {s}
               </button>
             ))}

@@ -37,16 +37,27 @@ export default function SalesLineChart({data, options={}}){
       }
     },
     scales: {
-      x: {title: {display: true, text: options.xLabel || 'Date'}, grid:{color: colors.grid}, ticks:{color: colors.text}},
+      x: {
+        title: {display: true, text: options.xLabel || 'Date'}, 
+        grid:{color: colors.grid}, 
+        ticks:{
+          color: colors.text, 
+          maxRotation: 45, 
+          minRotation: 0,
+          autoSkip: true,
+          maxTicksLimit: 10
+        }
+      },
       y: {
         title: {display: true, text: options.yLabel || 'Sales Amount'},
         ticks: { callback: (v)=> v.toLocaleString(), color: colors.text },
-        grid:{color: colors.grid}
+        grid:{color: colors.grid},
+        beginAtZero: true
       }
     }
   }
   return (
-    <div style={{height: 300}}>
+    <div style={{width: '100%', height: '100%', minHeight: '260px'}}>
       <Line data={chartData} options={defaultOptions} />
     </div>
   )

@@ -53,14 +53,13 @@ def generate_text(prompt: str, max_tokens: int = 150) -> str:
     # Google Generative AI (Gemini)
     if GOOGLE_API_KEY and genai is not None:
         # Try configured model first, then sensible fallbacks
+        # Use currently available models as of 2025
         candidates = [
             GOOGLE_MODEL,
-            'gemini-1.5-flash-8b',
-            'gemini-1.5-flash',
-            'gemini-1.5-flash-latest',
-            'gemini-1.5-pro',
-            'gemini-1.5-pro-latest',
-            'gemini-1.0-pro',
+            'models/gemini-2.0-flash',
+            'models/gemini-2.5-flash',
+            'models/gemini-flash-latest',
+            'models/gemini-pro-latest',
         ]
         seen = set()
         errors = []
@@ -115,12 +114,10 @@ def test_google_key() -> str:
         return "google-generativeai not installed"
     candidates = [
         GOOGLE_MODEL,
-        'gemini-1.5-flash-8b',
-        'gemini-1.5-flash',
-        'gemini-1.5-flash-latest',
-        'gemini-1.5-pro',
-        'gemini-1.5-pro-latest',
-        'gemini-1.0-pro',
+        'models/gemini-2.0-flash',
+        'models/gemini-2.5-flash',
+        'models/gemini-flash-latest',
+        'models/gemini-pro-latest',
     ]
     seen = set()
     errors = []

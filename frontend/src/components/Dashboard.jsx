@@ -160,12 +160,73 @@ export default function Dashboard(){
   const customerAiError = customerResp?.ai_error
   const loadingCharts = salesLoading || profitLoading || regionLoading || customerLoading
 
+  // Compute deterministic totals from uploaded dataset when available
+  const { data: totalSalesResp } = useQuery({
+    queryKey: ['analytics','total_sales',{ startDate, endDate, datasets }],
+    queryFn: async () => {
+      if (!allowAutoLoad || !datasets || datasets.length === 0) return null
+      try {
+        const latest = datasets[0]
+        const res = await api.post('/analytics/kpi', {
+          metric: 'sum_amount',
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          filters: [{ field: 'type', op: '=', value: 'sale' }]
+        })
+        return res.data
+      } catch (e) {
+        return null
+      }
+    },
+    enabled: allowAutoLoad && !!(datasets && datasets.length > 0),
+    staleTime: 30_000,
+  })
+
+  const { data: totalPurchasesResp } = useQuery({
+    queryKey: ['analytics','total_purchases',{ startDate, endDate, datasets }],
+    queryFn: async () => {
+      if (!allowAutoLoad || !datasets || datasets.length === 0) return null
+      try {
+        const res = await api.post('/analytics/kpi', {
+          metric: 'sum_amount',
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          filters: [{ field: 'type', op: '=', value: 'purchase' }]
+        })
+        return res.data
+      } catch (e) {
+        return null
+      }
+    },
+    enabled: allowAutoLoad && !!(datasets && datasets.length > 0),
+    staleTime: 30_000,
+  })
+
+  const { data: totalQuantityResp } = useQuery({
+    queryKey: ['analytics','total_quantity',{ startDate, endDate, datasets }],
+    queryFn: async () => {
+      if (!allowAutoLoad || !datasets || datasets.length === 0) return null
+      try {
+        const res = await api.post('/analytics/kpi', {
+          metric: 'sum_quantity',
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+        })
+        return res.data
+      } catch (e) {
+        return null
+      }
+    },
+    enabled: allowAutoLoad && !!(datasets && datasets.length > 0),
+    staleTime: 30_000,
+  })
+
   // Only consider business/smart data present if the user allowed auto-loading.
   // This ensures the dashboard remains empty on a fresh page load.
   const hasBusinessData = allowAutoLoad && summary && (summary.total_sales || summary.total_purchases)
   const hasSmartData = allowAutoLoad && smartAnalytics && smartAnalytics.kpis
-  // Do NOT auto-select a dataset on page load - keep dashboard empty until user uploads/selects
-  const activeDataset = null
+  // Auto-select the latest dataset when user has uploaded or enabled auto-load
+  const activeDataset = (allowAutoLoad && datasets && datasets.length > 0) ? datasets[0] : null
 
   const getValue = (item) => {
     if (!item || typeof item !== 'object') return 0
@@ -194,9 +255,9 @@ export default function Dashboard(){
   const profitKpi = extractKpi(['profit'])
   const lossKpi = extractKpi(['loss'])
 
-  const displayQuantity = summary?.total_quantity ?? qtyKpi?.value ?? '—'
-  const displaySales = summary?.total_sales ? fmtCurrency(summary.total_sales) : (salesKpi?.value ?? '—')
-  const displayPurchases = summary?.total_purchases ? fmtCurrency(summary.total_purchases) : (purchasesKpi?.value ?? '—')
+  const displayQuantity = summary?.total_quantity ?? (totalQuantityResp?.value ?? qtyKpi?.value) ?? '—'
+  const displaySales = summary?.total_sales !== undefined ? fmtCurrency(summary.total_sales) : (totalSalesResp?.value ? fmtCurrency(totalSalesResp.value) : (salesKpi?.value ?? '—'))
+  const displayPurchases = summary?.total_purchases !== undefined ? fmtCurrency(summary.total_purchases) : (totalPurchasesResp?.value ? fmtCurrency(totalPurchasesResp.value) : (purchasesKpi?.value ?? '—'))
   // profit/loss logic: prefer explicit profit/loss KPIs; if profit present but trend negative treat as loss
   const hasExplicitProfit = !!profitKpi
   const hasExplicitLoss = !!lossKpi
@@ -239,21 +300,11 @@ export default function Dashboard(){
             )}
           </>
         ) : hasSmartData ? (
-          // When smart analytics returns KPIs, try to map to our preferred set
-          <>
-            <KPI title="Quantity" value={qtyKpi?.value ?? '—'} />
-            <KPI title="Sales" value={salesKpi?.value ?? '—'} />
-            <KPI title="Purchases" value={purchasesKpi?.value ?? '—'} />
-            { (profitKpi || lossKpi) ? (
-              <>
-                {profitKpi && <KPI title="Profit" value={profitKpi.value} trend={profitKpi.trend} />}
-                {lossKpi && <KPI title="Loss" value={lossKpi.value} trend={lossKpi.trend} />}
-              </>
-            ) : (
-              smartAnalytics.kpis.slice(0,1).map((k,i)=>(<KPI key={i} title={k.title} value={k.value} trend={k.trend} />))
-            )}
-          </>
-  ) : (activeDataset && allowAutoLoad) ? (
+          // When smart analytics returns KPIs, display all available KPIs
+          smartAnalytics.kpis.slice(0, 4).map((k, i) => (
+            <KPI key={i} title={k.title} value={k.value} trend={k.trend} />
+          ))
+        ) : (activeDataset && allowAutoLoad) ? (
           <>
             <KPI title="Dataset" value={activeDataset.original_filename} />
             <KPI title="Rows" value={activeDataset.row_count?.toLocaleString() || '—'} />
@@ -368,10 +419,9 @@ export default function Dashboard(){
         </div>
       </section>
 
-      <div className="grid xl:grid-cols-[2fr,1fr] gap-6">
-        <div className="space-y-6">
-          {hasBusinessData ? (
-            <div className="grid md:grid-cols-2 gap-6">
+      <div className="space-y-6">
+        {hasBusinessData ? (
+            <div className="grid gap-6">
               <ChartCard
                 title="Sales over time"
                 narrative={salesNarrative}
@@ -407,20 +457,30 @@ export default function Dashboard(){
               </ChartCard>
             </div>
           ) : hasSmartData && smartAnalytics.charts ? (
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid gap-6">
               {smartAnalytics.charts.map((chart, index) => (
                 <ChartCard key={index} title={chart.title} narrative={chart.insight}>
-                  <div className="h-[300px] flex items-center justify-center">
-                    {chart.type === 'line' && chart.data ? (
-                      <SalesLineChart data={chart.data} options={{ xLabel: chart.xLabel, yLabel: chart.yLabel }} />
-                    ) : chart.type === 'bar' && chart.data ? (
-                      <ProfitBarChart items={chart.data} options={{ xLabel: chart.xLabel, yLabel: chart.yLabel }} />
-                    ) : chart.type === 'pie' && chart.data ? (
-                      <PieChart items={chart.data} />
-                    ) : (
-                      <EmptyChart message={chart.description || 'Chart data processing...'} />
-                    )}
-                  </div>
+                  {chart.type === 'line' && chart.data ? (
+                    <SalesLineChart 
+                      data={{
+                        dates: chart.data.map(d => d.x || d.date || d.label || ''),
+                        amounts: chart.data.map(d => d.y || d.value || 0)
+                      }} 
+                      options={{ xLabel: chart.xLabel, yLabel: chart.yLabel }} 
+                    />
+                  ) : chart.type === 'bar' && chart.data ? (
+                    <ProfitBarChart 
+                      items={chart.data.map(d => ({
+                        product: d.name || d.category || d.label || d.x || '',
+                        profit: d.value || d.y || 0
+                      }))} 
+                      options={{ xLabel: chart.xLabel, yLabel: chart.yLabel }} 
+                    />
+                  ) : chart.type === 'pie' && chart.data ? (
+                    <PieChart items={chart.data} />
+                  ) : (
+                    <EmptyChart message={chart.description || 'Chart data processing...'} />
+                  )}
                 </ChartCard>
               ))}
             </div>
@@ -485,7 +545,9 @@ export default function Dashboard(){
                 <div className="w-full h-[340px] p-4">
                   <PieChart key={document?.documentElement?.classList?.contains('dark') ? 'dark' : 'light'} items={regionData} />
                 </div>
-              ) : null}
+              ) : (
+                <EmptyChart message="No regional data available for this period." />
+              )}
             </ChartCard>
 
             <ChartCard
@@ -500,18 +562,17 @@ export default function Dashboard(){
                 <div className="w-full h-[340px] p-4">
                   <PieChart key={document?.documentElement?.classList?.contains('dark') ? 'dark' : 'light'} items={customerData} />
                 </div>
-              ) : null}
+              ) : (
+                <EmptyChart message="No customer data available for this period." />
+              )}
             </ChartCard>
           </div>
 
-          {/* AI Chat - small vertical card placed below charts */}
-          <div className="space-y-4">
-            <div className="panel p-3 max-w-md">
-              <AIChat compact />
-            </div>
+          {/* AI Chat - full width below charts */}
+          <div className="panel p-6">
+            <AIChat compact />
           </div>
         </div>
-      </div>
     </div>
   )
 }
@@ -544,7 +605,7 @@ function ChartCard({ title, children, narrative, error, loading, actionLabel, ac
           </a>
         )}
       </div>
-      <div className="min-h-[260px] rounded-xl bg-slate-50 dark:bg-slate-900/40 flex items-center justify-center overflow-hidden">
+      <div className="h-[300px] w-full rounded-xl bg-slate-50 dark:bg-slate-900/40 overflow-hidden p-4">
         {loading ? <div className="h-full w-full skeleton" /> : children}
       </div>
       {error ? (

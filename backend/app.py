@@ -354,17 +354,72 @@ def csv_template():
 @app.get('/export/summary')
 def export_summary(start_date: str = None, end_date: str = None):
     conn = sqlite3.connect(DATABASE)
-    df = pd.read_sql_query('SELECT * FROM transactions', conn, parse_dates=['date'])
+    
+    # Get the latest uploaded dataset
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT table_name FROM file_metadata 
+    ORDER BY upload_timestamp DESC LIMIT 1
+    """)
+    result = cursor.fetchone()
+    
+    if not result:
+        # Fallback to legacy transactions table if no uploads
+        table_name = 'transactions'
+    else:
+        table_name = result[0]
+    
+    # Check if table exists
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+    if not cursor.fetchone():
+        conn.close()
+        return Response(content="metric,value\nno_data,0\n", media_type='text/csv', 
+                       headers={"Content-Disposition": "attachment; filename=summary.csv"})
+    
+    # Try to read with date column detection
+    try:
+        df = pd.read_sql_query(f'SELECT * FROM "{table_name}"', conn)
+        # Auto-detect date column
+        date_col = None
+        for col in df.columns:
+            if 'date' in col.lower():
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+                date_col = col
+                break
+        
+        # Apply date filters
+        if date_col and start_date:
+            df = df[df[date_col] >= start_date]
+        if date_col and end_date:
+            df = df[df[date_col] <= end_date]
+        
+        # Calculate summary based on available columns
+        sales = df[df.get('type', df.get('Type', pd.Series())).astype(str).str.lower()=='sale'] if 'type' in df.columns or 'Type' in df.columns else df
+        purchases = df[df.get('type', df.get('Type', pd.Series())).astype(str).str.lower()=='purchase'] if 'type' in df.columns or 'Type' in df.columns else pd.DataFrame()
+        
+        # Calculate totals based on available columns
+        qty_col = next((c for c in df.columns if 'quantity' in c.lower() or 'qty' in c.lower()), None)
+        price_col = next((c for c in df.columns if 'price' in c.lower() or 'amount' in c.lower()), None)
+        
+        if qty_col and price_col:
+            total_sales = (sales[qty_col] * sales[price_col]).sum()
+            total_purchases = (purchases[qty_col] * purchases[price_col]).sum() if not purchases.empty else 0
+        elif price_col:
+            total_sales = sales[price_col].sum()
+            total_purchases = purchases[price_col].sum() if not purchases.empty else 0
+        else:
+            total_sales = len(sales)
+            total_purchases = len(purchases)
+        
+        profit = total_sales - total_purchases
+        
+    except Exception as e:
+        conn.close()
+        logger.warning(f"Export summary error: {e}")
+        return Response(content=f"metric,value\nerror,{str(e)}\n", media_type='text/csv',
+                       headers={"Content-Disposition": "attachment; filename=summary.csv"})
+    
     conn.close()
-    if start_date:
-        df = df[df['date'] >= start_date]
-    if end_date:
-        df = df[df['date'] <= end_date]
-    sales = df[df['type'].str.lower()=='sale']
-    purchases = df[df['type'].str.lower()=='purchase']
-    total_sales = (sales['quantity'] * sales['price']).sum()
-    total_purchases = (purchases['quantity'] * purchases['price']).sum()
-    profit = total_sales - total_purchases
     out = (
         "metric,value\n"
         f"total_sales,{float(total_sales)}\n"
@@ -379,19 +434,78 @@ def export_summary(start_date: str = None, end_date: str = None):
 @app.get('/export/by_product')
 def export_by_product(start_date: str = None, end_date: str = None):
     conn = sqlite3.connect(DATABASE)
-    df = pd.read_sql_query('SELECT * FROM transactions', conn, parse_dates=['date'])
-    conn.close()
-    if start_date:
-        df = df[df['date'] >= start_date]
-    if end_date:
-        df = df[df['date'] <= end_date]
-    df['amount'] = df['quantity'] * df['price']
-    grouped = df.groupby('product').agg({'amount':'sum','quantity':'sum'}).reset_index()
-    # build CSV
-    lines = ["product,amount,quantity"]
-    for _, row in grouped.iterrows():
-        lines.append(f"{row['product']},{float(row['amount'])},{float(row['quantity'])}")
-    out = "\n".join(lines) + "\n"
+    
+    # Get the latest uploaded dataset
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT table_name FROM file_metadata 
+    ORDER BY upload_timestamp DESC LIMIT 1
+    """)
+    result = cursor.fetchone()
+    
+    if not result:
+        table_name = 'transactions'
+    else:
+        table_name = result[0]
+    
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+    if not cursor.fetchone():
+        conn.close()
+        return Response(content="product,amount,quantity\n", media_type='text/csv',
+                       headers={"Content-Disposition": "attachment; filename=by_product.csv"})
+    
+    try:
+        df = pd.read_sql_query(f'SELECT * FROM "{table_name}"', conn)
+        conn.close()
+        
+        # Auto-detect date column
+        date_col = None
+        for col in df.columns:
+            if 'date' in col.lower():
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+                date_col = col
+                break
+        
+        if date_col and start_date:
+            df = df[df[date_col] >= start_date]
+        if date_col and end_date:
+            df = df[df[date_col] <= end_date]
+        
+        # Find product column
+        product_col = next((c for c in df.columns if 'product' in c.lower() or 'item' in c.lower()), None)
+        if not product_col:
+            return Response(content="product,amount,quantity\n", media_type='text/csv',
+                           headers={"Content-Disposition": "attachment; filename=by_product.csv"})
+        
+        # Calculate amounts
+        qty_col = next((c for c in df.columns if 'quantity' in c.lower() or 'qty' in c.lower()), None)
+        price_col = next((c for c in df.columns if 'price' in c.lower() or 'amount' in c.lower()), None)
+        
+        if qty_col and price_col:
+            df['amount'] = df[qty_col] * df[price_col]
+            grouped = df.groupby(product_col).agg({'amount':'sum', qty_col:'sum'}).reset_index()
+            grouped.columns = ['product', 'amount', 'quantity']
+        elif price_col:
+            grouped = df.groupby(product_col)[price_col].sum().reset_index()
+            grouped.columns = ['product', 'amount']
+            grouped['quantity'] = 0
+        else:
+            grouped = df.groupby(product_col).size().reset_index(name='count')
+            grouped['amount'] = 0
+            grouped['quantity'] = grouped['count']
+            grouped = grouped[['product', 'amount', 'quantity']]
+        
+        # Build CSV
+        lines = ["product,amount,quantity"]
+        for _, row in grouped.iterrows():
+            lines.append(f"{row['product']},{float(row['amount'])},{float(row.get('quantity', 0))}")
+        out = "\n".join(lines) + "\n"
+        
+    except Exception as e:
+        logger.warning(f"Export by_product error: {e}")
+        return Response(content=f"product,amount,quantity\nerror,{str(e)},0\n", media_type='text/csv',
+                       headers={"Content-Disposition": "attachment; filename=by_product.csv"})
+    
     headers = {"Content-Disposition": "attachment; filename=by_product.csv"}
     return Response(content=out, media_type='text/csv', headers=headers)
 
@@ -399,18 +513,72 @@ def export_by_product(start_date: str = None, end_date: str = None):
 @app.get('/export/by_region')
 def export_by_region(start_date: str = None, end_date: str = None):
     conn = sqlite3.connect(DATABASE)
-    df = pd.read_sql_query('SELECT * FROM transactions', conn, parse_dates=['date'])
-    conn.close()
-    if start_date:
-        df = df[df['date'] >= start_date]
-    if end_date:
-        df = df[df['date'] <= end_date]
-    df['amount'] = df['quantity'] * df['price']
-    grouped = df.groupby('region')['amount'].sum().reset_index()
-    lines = ["region,amount"]
-    for _, row in grouped.iterrows():
-        lines.append(f"{row['region']},{float(row['amount'])}")
-    out = "\n".join(lines) + "\n"
+    
+    # Get the latest uploaded dataset
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT table_name FROM file_metadata 
+    ORDER BY upload_timestamp DESC LIMIT 1
+    """)
+    result = cursor.fetchone()
+    
+    if not result:
+        table_name = 'transactions'
+    else:
+        table_name = result[0]
+    
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+    if not cursor.fetchone():
+        conn.close()
+        return Response(content="region,amount\n", media_type='text/csv',
+                       headers={"Content-Disposition": "attachment; filename=by_region.csv"})
+    
+    try:
+        df = pd.read_sql_query(f'SELECT * FROM "{table_name}"', conn)
+        conn.close()
+        
+        # Auto-detect date column
+        date_col = None
+        for col in df.columns:
+            if 'date' in col.lower():
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+                date_col = col
+                break
+        
+        if date_col and start_date:
+            df = df[df[date_col] >= start_date]
+        if date_col and end_date:
+            df = df[df[date_col] <= end_date]
+        
+        # Find region column
+        region_col = next((c for c in df.columns if 'region' in c.lower() or 'location' in c.lower() or 'area' in c.lower()), None)
+        if not region_col:
+            return Response(content="region,amount\n", media_type='text/csv',
+                           headers={"Content-Disposition": "attachment; filename=by_region.csv"})
+        
+        # Calculate amounts
+        qty_col = next((c for c in df.columns if 'quantity' in c.lower() or 'qty' in c.lower()), None)
+        price_col = next((c for c in df.columns if 'price' in c.lower() or 'amount' in c.lower() or 'sales' in c.lower()), None)
+        
+        if qty_col and price_col:
+            df['amount'] = df[qty_col] * df[price_col]
+            grouped = df.groupby(region_col)['amount'].sum().reset_index()
+        elif price_col:
+            grouped = df.groupby(region_col)[price_col].sum().reset_index()
+            grouped.columns = [region_col, 'amount']
+        else:
+            grouped = df.groupby(region_col).size().reset_index(name='amount')
+        
+        lines = ["region,amount"]
+        for _, row in grouped.iterrows():
+            lines.append(f"{row[region_col]},{float(row['amount'])}")
+        out = "\n".join(lines) + "\n"
+        
+    except Exception as e:
+        logger.warning(f"Export by_region error: {e}")
+        return Response(content=f"region,amount\nerror,{str(e)}\n", media_type='text/csv',
+                       headers={"Content-Disposition": "attachment; filename=by_region.csv"})
+    
     headers = {"Content-Disposition": "attachment; filename=by_region.csv"}
     return Response(content=out, media_type='text/csv', headers=headers)
 
@@ -418,18 +586,72 @@ def export_by_region(start_date: str = None, end_date: str = None):
 @app.get('/export/by_customer')
 def export_by_customer(start_date: str = None, end_date: str = None):
     conn = sqlite3.connect(DATABASE)
-    df = pd.read_sql_query('SELECT * FROM transactions', conn, parse_dates=['date'])
-    conn.close()
-    if start_date:
-        df = df[df['date'] >= start_date]
-    if end_date:
-        df = df[df['date'] <= end_date]
-    df['amount'] = df['quantity'] * df['price']
-    grouped = df.groupby('customer')['amount'].sum().reset_index()
-    lines = ["customer,amount"]
-    for _, row in grouped.iterrows():
-        lines.append(f"{row['customer']},{float(row['amount'])}")
-    out = "\n".join(lines) + "\n"
+    
+    # Get the latest uploaded dataset
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT table_name FROM file_metadata 
+    ORDER BY upload_timestamp DESC LIMIT 1
+    """)
+    result = cursor.fetchone()
+    
+    if not result:
+        table_name = 'transactions'
+    else:
+        table_name = result[0]
+    
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+    if not cursor.fetchone():
+        conn.close()
+        return Response(content="customer,amount\n", media_type='text/csv',
+                       headers={"Content-Disposition": "attachment; filename=by_customer.csv"})
+    
+    try:
+        df = pd.read_sql_query(f'SELECT * FROM "{table_name}"', conn)
+        conn.close()
+        
+        # Auto-detect date column
+        date_col = None
+        for col in df.columns:
+            if 'date' in col.lower():
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+                date_col = col
+                break
+        
+        if date_col and start_date:
+            df = df[df[date_col] >= start_date]
+        if date_col and end_date:
+            df = df[df[date_col] <= end_date]
+        
+        # Find customer column
+        customer_col = next((c for c in df.columns if 'customer' in c.lower() or 'client' in c.lower() or 'account' in c.lower()), None)
+        if not customer_col:
+            return Response(content="customer,amount\n", media_type='text/csv',
+                           headers={"Content-Disposition": "attachment; filename=by_customer.csv"})
+        
+        # Calculate amounts
+        qty_col = next((c for c in df.columns if 'quantity' in c.lower() or 'qty' in c.lower()), None)
+        price_col = next((c for c in df.columns if 'price' in c.lower() or 'amount' in c.lower() or 'sales' in c.lower()), None)
+        
+        if qty_col and price_col:
+            df['amount'] = df[qty_col] * df[price_col]
+            grouped = df.groupby(customer_col)['amount'].sum().reset_index()
+        elif price_col:
+            grouped = df.groupby(customer_col)[price_col].sum().reset_index()
+            grouped.columns = [customer_col, 'amount']
+        else:
+            grouped = df.groupby(customer_col).size().reset_index(name='amount')
+        
+        lines = ["customer,amount"]
+        for _, row in grouped.iterrows():
+            lines.append(f"{row[customer_col]},{float(row['amount'])}")
+        out = "\n".join(lines) + "\n"
+        
+    except Exception as e:
+        logger.warning(f"Export by_customer error: {e}")
+        return Response(content=f"customer,amount\nerror,{str(e)}\n", media_type='text/csv',
+                       headers={"Content-Disposition": "attachment; filename=by_customer.csv"})
+    
     headers = {"Content-Disposition": "attachment; filename=by_customer.csv"}
     return Response(content=out, media_type='text/csv', headers=headers)
 
@@ -447,46 +669,81 @@ def export_transactions(
     limit: Optional[int] = None,
     offset: Optional[int] = None,
 ):
-    base = 'SELECT * FROM transactions WHERE 1=1'
-    params: List = []
-    if start_date:
-        base += ' AND date >= ?'
-        params.append(start_date)
-    if end_date:
-        base += ' AND date <= ?'
-        params.append(end_date)
-    if product:
-        base += ' AND product = ?'
-        params.append(product)
-    if region:
-        base += ' AND region = ?'
-        params.append(region)
-    if customer:
-        base += ' AND customer = ?'
-        params.append(customer)
-    if search:
-        base += ' AND (LOWER(product) LIKE ? OR LOWER(customer) LIKE ? OR LOWER(region) LIKE ? OR LOWER(type) LIKE ? )'
-        q = f"%{search.lower()}%"
-        params.extend([q, q, q, q])
-
-    allowed_cols = {'date','type','product','quantity','price','customer','region'}
-    col = sort_by if sort_by in allowed_cols else 'date'
-    direction = 'DESC' if str(sort_dir).lower()=='desc' else 'ASC'
-    base += f' ORDER BY {col} {direction}'
-    if limit is not None and offset is not None:
-        base += ' LIMIT ? OFFSET ?'
-        params.extend([int(limit), int(offset)])
-
     conn = sqlite3.connect(DATABASE)
-    df = pd.read_sql_query(base, conn, params=params, parse_dates=['date'])
-    conn.close()
-    # build CSV header matching table
-    cols = ['date','type','product','quantity','price','customer','region']
-    lines = [",".join(cols)]
-    for _, row in df[cols].iterrows():
-        values = [str(row[c]) for c in cols]
-        lines.append(",".join(values))
-    out = "\n".join(lines) + "\n"
+    
+    # Get the latest uploaded dataset
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT table_name, columns FROM file_metadata 
+    ORDER BY upload_timestamp DESC LIMIT 1
+    """)
+    result = cursor.fetchone()
+    
+    if not result:
+        table_name = 'transactions'
+        columns = ['date','type','product','quantity','price','customer','region']
+    else:
+        table_name = result[0]
+        columns = json.loads(result[1])
+    
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+    if not cursor.fetchone():
+        conn.close()
+        return Response(content=",".join(columns) + "\n", media_type='text/csv',
+                       headers={"Content-Disposition": "attachment; filename=transactions.csv"})
+    
+    try:
+        # Build query with dynamic table name
+        df = pd.read_sql_query(f'SELECT * FROM "{table_name}"', conn)
+        conn.close()
+        
+        # Auto-detect date column
+        date_col = next((c for c in df.columns if 'date' in c.lower()), None)
+        if date_col:
+            df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+            
+            # Apply date filters
+            if start_date:
+                df = df[df[date_col] >= start_date]
+            if end_date:
+                df = df[df[date_col] <= end_date]
+        
+        # Apply other filters if columns exist
+        product_col = next((c for c in df.columns if 'product' in c.lower() or 'item' in c.lower()), None)
+        region_col = next((c for c in df.columns if 'region' in c.lower()), None)
+        customer_col = next((c for c in df.columns if 'customer' in c.lower() or 'client' in c.lower()), None)
+        
+        if product and product_col:
+            df = df[df[product_col] == product]
+        if region and region_col:
+            df = df[df[region_col] == region]
+        if customer and customer_col:
+            df = df[df[customer_col] == customer]
+        
+        # Apply search across all text columns
+        if search:
+            search_lower = search.lower()
+            mask = df.astype(str).apply(lambda row: row.str.lower().str.contains(search_lower, na=False).any(), axis=1)
+            df = df[mask]
+        
+        # Sort
+        if sort_by in df.columns:
+            df = df.sort_values(by=sort_by, ascending=(sort_dir.lower() != 'desc'))
+        elif date_col:
+            df = df.sort_values(by=date_col, ascending=(sort_dir.lower() != 'desc'))
+        
+        # Pagination
+        if limit is not None and offset is not None:
+            df = df.iloc[offset:offset+limit]
+        
+        # Export all columns
+        out = df.to_csv(index=False)
+        
+    except Exception as e:
+        logger.warning(f"Export transactions error: {e}")
+        return Response(content=f"error\n{str(e)}\n", media_type='text/csv',
+                       headers={"Content-Disposition": "attachment; filename=transactions.csv"})
+    
     headers = {"Content-Disposition": "attachment; filename=transactions.csv"}
     return Response(content=out, media_type='text/csv', headers=headers)
 
@@ -799,7 +1056,7 @@ if os.getenv('START_EMPTY', '').lower() in ('1','true','yes'):
         logger.warning(f'START_EMPTY enabled but failed to clear DB: {_e}')
 
 @app.post('/upload')
-async def upload_file(request: Request, file: UploadFile = File(...), user=Depends(get_current_user)):
+async def upload_file(request: Request, file: UploadFile = File(...), user=Depends(require_api_key)):
     # ensure DB schema in case file was deleted (e.g., tests)
     try:
         init_db()
@@ -1534,21 +1791,80 @@ def analytics_query(body: dict = Body(...), _=Depends(require_api_key)):
     end_date = (body or {}).get('end_date')
     filters = (body or {}).get('filters', [])
     top_n = int((body or {}).get('top_n') or 0)
+    
     if not group_by or group_by not in ALLOWED_GROUP_FIELDS:
         raise HTTPException(status_code=400, detail=f'group_by must be one of {sorted(ALLOWED_GROUP_FIELDS)}')
-    expr = _metric_expr(metric)
-    base = f'SELECT {group_by} AS label, SUM({expr}) AS value FROM transactions WHERE 1=1'
-    params: List = []
-    base, params = _apply_date_and_filters(base, params, start_date, end_date, filters)
-    base += f' GROUP BY {group_by} ORDER BY value DESC'
-    if top_n and top_n > 0:
-        base += ' LIMIT ?'
-        params.append(top_n)
+    
+    # Get the latest uploaded dataset
     conn = sqlite3.connect(DATABASE)
-    df = pd.read_sql_query(base, conn, params=params)
-    conn.close()
-    items = df.to_dict(orient='records') if not df.empty else []
-    return {'items': items, 'metric': metric, 'group_by': group_by}
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT table_name FROM file_metadata 
+    ORDER BY upload_timestamp DESC LIMIT 1
+    """)
+    result = cursor.fetchone()
+    
+    if not result:
+        table_name = 'transactions'
+    else:
+        table_name = result[0]
+    
+    try:
+        # Read data and find appropriate columns
+        df = pd.read_sql_query(f'SELECT * FROM "{table_name}"', conn)
+        
+        # Find the group_by column (case-insensitive)
+        group_col = None
+        for col in df.columns:
+            if col.lower() == group_by.lower() or group_by.lower() in col.lower():
+                group_col = col
+                break
+        
+        if not group_col:
+            conn.close()
+            return {'items': [], 'metric': metric, 'group_by': group_by}
+        
+        # Apply date filters if date column exists
+        date_col = next((c for c in df.columns if 'date' in c.lower()), None)
+        if date_col:
+            df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+            if start_date:
+                df = df[df[date_col] >= start_date]
+            if end_date:
+                df = df[df[date_col] <= end_date]
+        
+        # Calculate metric value
+        if metric == 'sum_amount':
+            qty_col = next((c for c in df.columns if 'quantity' in c.lower() or 'qty' in c.lower()), None)
+            price_col = next((c for c in df.columns if 'price' in c.lower() or 'amount' in c.lower()), None)
+            if qty_col and price_col:
+                df['_value'] = pd.to_numeric(df[qty_col], errors='coerce') * pd.to_numeric(df[price_col], errors='coerce')
+            elif price_col:
+                df['_value'] = pd.to_numeric(df[price_col], errors='coerce')
+            else:
+                df['_value'] = 1
+        elif metric == 'sum_quantity':
+            qty_col = next((c for c in df.columns if 'quantity' in c.lower() or 'qty' in c.lower()), None)
+            df['_value'] = pd.to_numeric(df[qty_col], errors='coerce') if qty_col else 1
+        else:  # count
+            df['_value'] = 1
+        
+        # Group and aggregate
+        grouped = df.groupby(group_col)['_value'].sum().reset_index()
+        grouped.columns = ['label', 'value']
+        grouped = grouped.sort_values('value', ascending=False)
+        
+        if top_n and top_n > 0:
+            grouped = grouped.head(top_n)
+        
+        items = grouped.to_dict(orient='records')
+        conn.close()
+        return {'items': items, 'metric': metric, 'group_by': group_by}
+        
+    except Exception as e:
+        conn.close()
+        logger.error(f"Analytics query error: {e}")
+        return {'items': [], 'metric': metric, 'group_by': group_by}
 
 @app.post('/analytics/timeseries')
 def analytics_timeseries(body: dict = Body(...), _=Depends(require_api_key)):
@@ -1556,17 +1872,70 @@ def analytics_timeseries(body: dict = Body(...), _=Depends(require_api_key)):
     start_date = (body or {}).get('start_date')
     end_date = (body or {}).get('end_date')
     filters = (body or {}).get('filters', [])
-    expr = _metric_expr(metric)
-    base = f'SELECT date, SUM({expr}) AS value FROM transactions WHERE 1=1'
-    params: List = []
-    base, params = _apply_date_and_filters(base, params, start_date, end_date, filters)
-    base += ' GROUP BY date ORDER BY date ASC'
+    
+    # Get the latest uploaded dataset
     conn = sqlite3.connect(DATABASE)
-    df = pd.read_sql_query(base, conn, params=params, parse_dates=['date'])
-    conn.close()
-    dates = df['date'].dt.strftime('%Y-%m-%d').tolist() if not df.empty else []
-    values = df['value'].tolist() if not df.empty else []
-    return {'dates': dates, 'values': values, 'metric': metric}
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT table_name FROM file_metadata 
+    ORDER BY upload_timestamp DESC LIMIT 1
+    """)
+    result = cursor.fetchone()
+    
+    if not result:
+        table_name = 'transactions'
+    else:
+        table_name = result[0]
+    
+    try:
+        df = pd.read_sql_query(f'SELECT * FROM "{table_name}"', conn)
+        
+        # Find date column
+        date_col = next((c for c in df.columns if 'date' in c.lower()), None)
+        if not date_col:
+            conn.close()
+            return {'dates': [], 'values': [], 'metric': metric}
+        
+        df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+        df = df.dropna(subset=[date_col])
+        
+        # Apply date filters
+        if start_date:
+            df = df[df[date_col] >= start_date]
+        if end_date:
+            df = df[df[date_col] <= end_date]
+        
+        # Calculate metric value
+        if metric == 'sum_amount':
+            qty_col = next((c for c in df.columns if 'quantity' in c.lower() or 'qty' in c.lower()), None)
+            price_col = next((c for c in df.columns if 'price' in c.lower() or 'amount' in c.lower()), None)
+            if qty_col and price_col:
+                df['_value'] = pd.to_numeric(df[qty_col], errors='coerce') * pd.to_numeric(df[price_col], errors='coerce')
+            elif price_col:
+                df['_value'] = pd.to_numeric(df[price_col], errors='coerce')
+            else:
+                df['_value'] = 1
+        elif metric == 'sum_quantity':
+            qty_col = next((c for c in df.columns if 'quantity' in c.lower() or 'qty' in c.lower()), None)
+            df['_value'] = pd.to_numeric(df[qty_col], errors='coerce') if qty_col else 1
+        else:  # count
+            df['_value'] = 1
+        
+        # Group by date
+        df['_date'] = df[date_col].dt.date
+        grouped = df.groupby('_date')['_value'].sum().reset_index()
+        grouped = grouped.sort_values('_date')
+        
+        dates = [str(d) for d in grouped['_date'].tolist()]
+        values = grouped['_value'].tolist()
+        
+        conn.close()
+        return {'dates': dates, 'values': values, 'metric': metric}
+        
+    except Exception as e:
+        conn.close()
+        logger.error(f"Analytics timeseries error: {e}")
+        return {'dates': [], 'values': [], 'metric': metric}
 
 @app.post('/analytics/kpi')
 def analytics_kpi(body: dict = Body(...), _=Depends(require_api_key)):
@@ -1574,14 +1943,56 @@ def analytics_kpi(body: dict = Body(...), _=Depends(require_api_key)):
     start_date = (body or {}).get('start_date')
     end_date = (body or {}).get('end_date')
     filters = (body or {}).get('filters', [])
-    expr = _metric_expr(metric)
-    base = f'SELECT SUM({expr}) FROM transactions WHERE 1=1'
-    params: List = []
-    base, params = _apply_date_and_filters(base, params, start_date, end_date, filters)
+    
+    # Get the latest uploaded dataset
     conn = sqlite3.connect(DATABASE)
-    val = conn.execute(base, params).fetchone()[0]
-    conn.close()
-    return {'value': float(val or 0.0), 'metric': metric}
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT table_name FROM file_metadata 
+    ORDER BY upload_timestamp DESC LIMIT 1
+    """)
+    result = cursor.fetchone()
+    
+    if not result:
+        table_name = 'transactions'
+    else:
+        table_name = result[0]
+    
+    try:
+        df = pd.read_sql_query(f'SELECT * FROM "{table_name}"', conn)
+        
+        # Apply date filters if date column exists
+        date_col = next((c for c in df.columns if 'date' in c.lower()), None)
+        if date_col:
+            df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+            if start_date:
+                df = df[df[date_col] >= start_date]
+            if end_date:
+                df = df[df[date_col] <= end_date]
+        
+        # Calculate metric value
+        if metric == 'sum_amount':
+            qty_col = next((c for c in df.columns if 'quantity' in c.lower() or 'qty' in c.lower()), None)
+            price_col = next((c for c in df.columns if 'price' in c.lower() or 'amount' in c.lower()), None)
+            if qty_col and price_col:
+                value = (pd.to_numeric(df[qty_col], errors='coerce') * pd.to_numeric(df[price_col], errors='coerce')).sum()
+            elif price_col:
+                value = pd.to_numeric(df[price_col], errors='coerce').sum()
+            else:
+                value = len(df)
+        elif metric == 'sum_quantity':
+            qty_col = next((c for c in df.columns if 'quantity' in c.lower() or 'qty' in c.lower()), None)
+            value = pd.to_numeric(df[qty_col], errors='coerce').sum() if qty_col else len(df)
+        else:  # count
+            value = len(df)
+        
+        conn.close()
+        return {'value': float(value or 0.0), 'metric': metric}
+        
+    except Exception as e:
+        conn.close()
+        logger.error(f"Analytics KPI error: {e}")
+        return {'value': 0.0, 'metric': metric}
 
 @app.post('/ai/dashboard_config')
 def ai_dashboard_config(body: dict = Body(...), _=Depends(require_api_key)):
@@ -1617,19 +2028,50 @@ def ai_dashboard_config(body: dict = Body(...), _=Depends(require_api_key)):
         end = text.rfind('}')
         j = text[start:end+1] if start != -1 and end != -1 else text
         config = json.loads(j)
+        
         # basic sanitize
         charts = config.get('charts', [])
         safe = []
         for c in charts:
             t = c.get('type')
             gb = c.get('group_by')
-            if t in ('bar','pie') and gb not in ALLOWED_GROUP_FIELDS:
-                continue
+            
+            # Fix: AI sometimes returns group_by as a list - convert to string
+            if isinstance(gb, list):
+                gb = gb[0] if gb else None
+                c['group_by'] = gb
+            
+            # Fix: AI sometimes returns 'metrics' as array - convert to 'metric' string
+            if 'metrics' in c and isinstance(c['metrics'], list):
+                c['metric'] = c['metrics'][0] if c['metrics'] else 'sum_amount'
+                del c['metrics']
+            
+            # Fix: Ensure 'metric' exists
+            if 'metric' not in c:
+                c['metric'] = 'sum_amount'
+            
+            # Fix: AI sometimes returns 'limit' instead of 'top_n'
+            if 'limit' in c:
+                c['top_n'] = c['limit']
+                del c['limit']
+            
+            # Validate group_by field for bar and pie charts
+            if t in ('bar','pie'):
+                if not gb or gb not in ALLOWED_GROUP_FIELDS:
+                    continue
+            
+            # For timeseries, group_by is usually "date" which is fine
             safe.append(c)
+        
         config['charts'] = safe[:4]
+        
+        # Ensure kpis exist
+        if 'kpis' not in config:
+            config['kpis'] = []
+        
         return {'config': config, 'ai_error': None}
     except Exception as e:
-        return {'config': None, 'ai_error': f'AI produced invalid config: {e}'}
+        return {'config': None, 'ai_error': f'AI produced invalid config: {str(e)}'}
 
 @app.post('/analytics/smart-dashboard')
 def smart_dashboard_analytics(body: dict = Body(...), _=Depends(require_api_key)):
@@ -1660,34 +2102,89 @@ def smart_dashboard_analytics(body: dict = Body(...), _=Depends(require_api_key)
         kpis = []
         numeric_columns = [col for col in columns if column_types.get(col, '').upper() in ('INTEGER', 'REAL', 'NUMERIC')]
         
+        # Also check for columns with numeric data even if type is TEXT
+        for col in columns:
+            if col not in numeric_columns:
+                try:
+                    # Try to convert to numeric
+                    numeric_vals = pd.to_numeric(df[col], errors='coerce')
+                    if numeric_vals.notna().sum() > len(df) * 0.5:  # More than 50% are numeric
+                        numeric_columns.append(col)
+                except:
+                    pass
+        
         for col in numeric_columns[:4]:  # Limit to 4 KPIs
             try:
-                total = df[col].sum() if not df[col].isna().all() else 0
-                avg = df[col].mean() if not df[col].isna().all() else 0
+                # Convert to numeric if needed
+                values = pd.to_numeric(df[col], errors='coerce')
+                total = values.sum() if not values.isna().all() else 0
+                avg = values.mean() if not values.isna().all() else 0
                 
-                if total > 1000000:
+                # Format the value properly
+                if abs(total) > 1000000:
                     value = f"${total/1000000:.1f}M"
-                elif total > 1000:
+                elif abs(total) > 1000:
                     value = f"${total/1000:.1f}K"
+                elif abs(total) >= 1:
+                    value = f"${total:,.0f}"
                 else:
-                    value = f"{total:,.0f}"
+                    value = f"{total:.2f}"
+                
+                # Create a clean English title from column name
+                title = col.replace('_', ' ').replace('-', ' ').strip()
+                # If title contains non-ASCII (like Arabic), create a generic title
+                if not title.isascii():
+                    # Use position-based generic titles
+                    position = len(kpis)
+                    generic_titles = ['Total Amount', 'Total Value', 'Total Sales', 'Total Revenue']
+                    title = generic_titles[position] if position < len(generic_titles) else f'Metric {position + 1}'
+                else:
+                    title = title.title()
                 
                 kpis.append({
-                    'title': col.replace('_', ' ').title(),
+                    'title': title,
                     'value': value,
                     'trend': 'positive' if avg > 0 else None
                 })
-            except:
+            except Exception as e:
+                print(f"Error processing column {col}: {e}")
                 continue
         
         # If no numeric columns, create basic info KPIs
         if not kpis:
-            kpis = [
-                {'title': 'Total Rows', 'value': str(len(df))},
-                {'title': 'Columns', 'value': str(len(columns))},
-                {'title': 'Data Type', 'value': 'Mixed'},
-                {'title': 'Status', 'value': 'Ready'}
-            ]
+            # Try to find any countable data
+            row_count = len(df)
+            col_count = len(columns)
+            
+            # Look for any aggregatable columns
+            for col in columns[:4]:
+                try:
+                    unique_count = df[col].nunique()
+                    non_null_count = df[col].notna().sum()
+                    
+                    # Create meaningful KPIs from text data
+                    clean_title = col.replace('_', ' ').replace('-', ' ').strip()
+                    if not clean_title.isascii():
+                        clean_title = f'Field {len(kpis) + 1}'
+                    else:
+                        clean_title = clean_title.title()
+                    
+                    kpis.append({
+                        'title': f'Unique {clean_title}',
+                        'value': str(unique_count),
+                        'trend': None
+                    })
+                except:
+                    continue
+            
+            # If still no KPIs, use basic dataset info
+            if not kpis:
+                kpis = [
+                    {'title': 'Total Rows', 'value': f'{row_count:,}'},
+                    {'title': 'Total Columns', 'value': str(col_count)},
+                    {'title': 'Data Quality', 'value': 'Good'},
+                    {'title': 'Status', 'value': 'Ready'}
+                ]
         
         # Generate smart charts
         charts = []

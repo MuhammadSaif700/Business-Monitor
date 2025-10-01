@@ -21,12 +21,13 @@ export default function App(){
   const [theme, setTheme] = useState(()=> localStorage.getItem('theme') || 'light')
   const [showFeedback, setShowFeedback] = useState(false)
 
-  // Initialize sidebar state based on screen size once
   useEffect(()=>{
     if(typeof window === 'undefined') return
     const media = window.matchMedia('(min-width: 1024px)')
-    // Only set initial state, don't keep syncing
-    setSidebarOpen(media.matches)
+    const update = (event)=> setSidebarOpen(event.matches)
+    update(media)
+    media.addEventListener('change', update)
+    return ()=> media.removeEventListener('change', update)
   },[])
 
   useEffect(()=>{
@@ -72,12 +73,10 @@ export default function App(){
         sidebarOpen={sidebarOpen}
         onShowFeedback={()=>setShowFeedback(true)}
       />
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="flex flex-1 overflow-hidden">
         <Sidebar token={token} onClose={()=>setSidebarOpen(false)} isOpen={sidebarOpen} />
-        {sidebarOpen && <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-30 lg:hidden top-[72px]" onClick={()=>setSidebarOpen(false)} />}
-        <main className={`relative z-10 flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin transition-all duration-300 ${
-          sidebarOpen ? 'lg:ml-64' : 'ml-0'
-        }`}>
+        {sidebarOpen && <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-20 lg:hidden" onClick={()=>setSidebarOpen(false)} />}
+        <main className="relative z-10 flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/dashboard" element={<Dashboard />} />
@@ -104,14 +103,20 @@ function Header({token,onLogout,onToggleTheme,theme,onToggleSidebar,sidebarOpen,
       <div className="top-bar-content max-w-7xl mx-auto">
         {/* Left section: Menu button + Brand */}
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => onToggleSidebar()}
+          <button 
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('Menu button clicked, current state:', sidebarOpen);
+              onToggleSidebar();
+            }}
             className={`relative inline-flex items-center justify-center w-11 h-11 rounded-xl bg-gradient-to-br transition-all duration-300 shadow-md hover:shadow-lg active:scale-95 cursor-pointer ${
-              sidebarOpen
-                ? 'from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700'
+              sidebarOpen 
+                ? 'from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700' 
                 : 'from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 text-slate-700 dark:text-slate-200 hover:from-slate-200 hover:to-slate-300 dark:hover:from-slate-600 dark:hover:to-slate-700'
             }`}
-            aria-label="Toggle menu"
+            aria-label="Toggle navigation"
+            title={sidebarOpen ? 'Close menu' : 'Open menu'}
             type="button"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -128,11 +133,11 @@ function Header({token,onLogout,onToggleTheme,theme,onToggleSidebar,sidebarOpen,
             <p className="hidden sm:block text-xs text-slate-500 dark:text-slate-400 font-medium">Adaptive insights for every upload</p>
           </div>
         </div>
-
+        
         {/* Right section: Action buttons */}
         <div className="flex items-center gap-3">
           <button onClick={onShowFeedback} className="btn-icon" title="Share feedback">💬</button>
-          <Link to="/notifications" className="btn-icon hidden sm:inline-flex" title="Notifications">🔔</Link>
+          <Link to="/notifications" className="btn-icon hidden sm:inline-flex" title="Notifications">�</Link>
           <button onClick={onToggleTheme} className="btn-icon" title="Toggle color scheme">{theme==='dark' ? '🌙' : '☀️'}</button>
           <Link to="/profile" className="profile-chip hidden sm:inline-flex" title="Profile">
             <span>👤</span>
@@ -153,8 +158,8 @@ function Header({token,onLogout,onToggleTheme,theme,onToggleSidebar,sidebarOpen,
 function Sidebar({token, onClose, isOpen}){
   const { pathname } = useLocation()
   return (
-    <aside className={`z-40 flex w-72 lg:w-64 flex-col gap-6 px-6 py-6 border-r border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl fixed top-[72px] bottom-0 left-0 overflow-y-auto transition-transform duration-300 ${
-      isOpen ? 'translate-x-0' : '-translate-x-full'
+    <aside className={`z-20 flex w-72 lg:w-64 flex-col gap-6 px-6 py-6 border-r border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl fixed lg:relative inset-y-0 left-0 overflow-y-auto transition-transform duration-300 ${
+      isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
     }`}>
 
       <div className="mb-2">
@@ -162,7 +167,7 @@ function Sidebar({token, onClose, isOpen}){
       </div>
 
       <NavSection title="Overview">
-        <NavItem icon="🏠" label="Dashboard" to="/dashboard" active={pathname=='/dashboard' || pathname==='/'} />
+        <NavItem icon="🏠" label="Dashboard" to="/dashboard" active={pathname==='/dashboard' || pathname==='/'} />
       </NavSection>
       <NavSection title="Data">
         <NavItem icon="📤" label="Upload" to="/upload" active={pathname==='/upload'} />
@@ -170,6 +175,7 @@ function Sidebar({token, onClose, isOpen}){
         <NavItem icon="📋" label="Transactions" to="/transactions" active={pathname==='/transactions'} />
       </NavSection>
       <NavSection title="Insights">
+        {/* <NavItem icon="📈" label="AI Analytics" to="/insights" active={pathname==='/insights'} /> */}
         <NavItem icon="✨" label="AI Designer" to="/designer" active={pathname==='/designer'} />
       </NavSection>
       <NavSection title="Account">

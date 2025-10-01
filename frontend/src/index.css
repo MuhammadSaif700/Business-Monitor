@@ -80,9 +80,13 @@
 	}
 	
 	.btn-outline { 
-		@apply border-2 border-slate-300/70 dark:border-slate-600/70 bg-transparent 
-		text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50
-		hover:border-slate-400 dark:hover:border-slate-500 shadow-sm hover:shadow-md; 
+		/* Make outline buttons more prominent and legible */
+	@apply inline-flex items-center justify-center gap-2.5 font-semibold rounded-xl px-6 py-3 text-sm
+	border-2 border-slate-300/80 dark:border-slate-600/80 bg-transparent
+	dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-[rgb(203_213_225_/_0.8)]
+
+	hover:border-blue-400 dark:hover:border-blue-400 shadow-sm hover:shadow-md
+	focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:ring-offset-1 transition-all duration-200;
 	}
 
 	.btn-danger {
@@ -104,24 +108,23 @@
 		transition-all duration-300 hover:-translate-y-0.5;
 	}
 
+	/* Navigation link styles */
 	.nav-link {
-		@apply flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-semibold
-		text-slate-600 dark:text-slate-300 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 
-		hover:text-blue-700 dark:hover:from-blue-500/10 dark:hover:to-indigo-500/10 dark:hover:text-blue-200
-		transition-all duration-300 ease-out hover:shadow-md hover:-translate-y-0.5;
+		@apply flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium
+		text-slate-700 dark:text-slate-300 
+		hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 
+		hover:text-blue-700 dark:hover:from-blue-500/10 dark:hover:to-indigo-500/10 
+		dark:hover:text-blue-200
+		transition-all duration-200 ease-out;
 	}
 
 	.nav-link-active {
-		@apply bg-gradient-to-r from-blue-600 via-blue-600 to-indigo-600 text-white shadow-lg
-		dark:from-blue-500 dark:via-blue-500 dark:to-indigo-500 transform scale-105;
+		@apply bg-gradient-to-r from-blue-600 via-blue-600 to-indigo-600 text-white shadow-md
+		dark:from-blue-500 dark:via-blue-500 dark:to-indigo-500;
 	}
 
 	.nav-link-icon {
-		@apply text-xl transition-transform duration-300; 
-	}
-	
-	.group:hover .nav-link-icon {
-		transform: scale(1.1);
+		@apply text-lg flex-shrink-0; 
 	}
 
 /* Chart card enhancements */
@@ -276,11 +279,11 @@
 /* Enhanced Top Bar Styling */
 .top-bar {
 	@apply bg-gradient-to-r from-white via-slate-50 to-white dark:from-slate-900 dark:via-slate-800 dark:to-slate-900
-	border-b border-slate-200/80 dark:border-slate-700/60 backdrop-blur-xl shadow-lg;
+	border-b border-slate-200/80 dark:border-slate-700/60 backdrop-blur-xl shadow-lg relative;
 }
 
 .top-bar-content {
-	@apply flex items-center justify-between px-6 py-4;
+	@apply flex items-center justify-between px-6 py-4 relative z-10;
 }
 
 .brand-logo {

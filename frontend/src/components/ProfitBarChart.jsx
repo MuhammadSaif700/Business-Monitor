@@ -21,13 +21,24 @@ export default function ProfitBarChart({items, options={}}){
       tooltip:{ callbacks:{ label:(ctx)=> ` ${ctx.label}: ${ctx.parsed.y.toLocaleString()}` } }
     },
     scales:{
-      x:{title:{display:true,text:options.xLabel||'Product'}, grid:{color: colors.grid}, ticks:{color: colors.text}},
+      x:{
+        title:{display:true,text:options.xLabel||'Product'}, 
+        grid:{color: colors.grid}, 
+        ticks:{
+          color: colors.text, 
+          maxRotation: 45, 
+          minRotation: 0,
+          autoSkip: true,
+          maxTicksLimit: 10
+        }
+      },
       y:{
         title:{display:true,text:options.yLabel||'Profit'},
         ticks:{ callback: (v)=> v.toLocaleString(), color: colors.text },
-        grid:{color: colors.grid}
+        grid:{color: colors.grid},
+        beginAtZero: true
       }
     }
   }
-  return <div style={{height:300}}><Bar data={chartData} options={defaultOptions} /></div>
+  return <div style={{width: '100%', height: '100%', minHeight: '260px'}}><Bar data={chartData} options={defaultOptions} /></div>
 }

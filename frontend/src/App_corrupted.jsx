@@ -77,7 +77,6 @@ export default function App(){
             <Route path="/upload" element={<div className="space-y-6"><Upload /></div>} />
             <Route path="/datasets" element={<div className="space-y-6"><DatasetList /></div>} />
             <Route path="/transactions" element={<div className="panel p-5"><TransactionsTable /></div>} />
-            <Route path="/insights" element={<div className="panel p-5"><AIChat /></div>} />
             <Route path="/profile" element={<UserProfile />} />
             <Route path="/notifications" element={<div className="max-w-4xl mx-auto"><NotificationCenter /></div>} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
@@ -154,10 +153,10 @@ function Sidebar({token, onClose}){
       </div>
 
       {/* Navigation Header */}
-      <div className="space-y-2 hidden lg:block">
+      {/* <div className="space-y-2 hidden lg:block">
         <div className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Navigation</div>
         <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">Navigate through your workspace</p>
-      </div>
+      </div> */}
 
       {/* Main Navigation */}
       <nav className="flex-1 space-y-6">
@@ -172,7 +171,6 @@ function Sidebar({token, onClose}){
         </NavSection>
         
         <NavSection title="🤖 AI Insights">
-          <NavItem icon="📈" label="AI Analytics" to="/insights" active={pathname==='/insights'} />
           <NavItem icon="✨" label="AI Designer" to="/designer" active={pathname==='/designer'} />
         </NavSection>
         
