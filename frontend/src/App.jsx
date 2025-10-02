@@ -52,7 +52,7 @@ export default function App(){
   useEffect(() => {
     if (!token) {
       console.log('No token found, setting demo API key for development')
-      setToken('demoapikey')
+      setToken('738353')
     }
   }, [])
 

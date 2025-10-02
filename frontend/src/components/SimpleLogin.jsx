@@ -8,14 +8,14 @@ export default function SimpleLogin({ onToken }) {
     setLoading(true)
     try {
       // Set the API key directly
-      setApiToken('demoapikey')
-      console.log('Legacy token set:', 'demoapikey')
+      setApiToken('738353')
+      console.log('Legacy token set:', '738353')
       
       // Test the API immediately
       const testRes = await api.get('/datasets')
       console.log('API test successful:', testRes.data)
       
-      onToken('demoapikey')
+      onToken('738353')
     } catch (error) {
       console.error('Legacy login failed:', error)
       alert('Login failed: ' + (error.response?.data?.detail || error.message))
