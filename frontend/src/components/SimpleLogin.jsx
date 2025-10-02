@@ -7,15 +7,16 @@ export default function SimpleLogin({ onToken }) {
   const handleLegacyLogin = async () => {
     setLoading(true)
     try {
+      const apiKey = import.meta.env.VITE_API_KEY || '738353'
       // Set the API key directly
-      setApiToken('738353')
-      console.log('Legacy token set:', '738353')
+      setApiToken(apiKey)
+      console.log('Legacy token set:', apiKey)
       
       // Test the API immediately
       const testRes = await api.get('/datasets')
       console.log('API test successful:', testRes.data)
       
-      onToken('738353')
+      onToken(apiKey)
     } catch (error) {
       console.error('Legacy login failed:', error)
       alert('Login failed: ' + (error.response?.data?.detail || error.message))

@@ -51,8 +51,9 @@ export default function App(){
   // Auto-set demo API key for development if no token exists
   useEffect(() => {
     if (!token) {
+      const apiKey = import.meta.env.VITE_API_KEY || '738353'
       console.log('No token found, setting demo API key for development')
-      setToken('738353')
+      setToken(apiKey)
     }
   }, [])
 
