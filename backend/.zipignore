@@ -1,0 +1,11 @@
+.env
+business.db
+*.db
+*.zip
+.pytest_cache/
+__pycache__/
+tests/
+scripts/
+*.pyc
+.venv/
+venv/
