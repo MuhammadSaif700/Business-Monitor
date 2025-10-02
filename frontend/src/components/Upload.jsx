@@ -101,6 +101,30 @@ export default function Upload(){
             Reset Data
           </button>
         </div>
+
+        <div className="mb-6 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-400/30">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">ℹ️</span>
+            <div className="flex-1">
+              <h4 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">Required Fields for Best Results</h4>
+              <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
+                For optimal dashboard generation and AI-powered insights, please ensure your file contains these fields:
+              </p>
+              <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1 ml-4">
+                <li>• <strong>Date</strong> - Transaction date (required for time-series charts)</li>
+                <li>• <strong>Product</strong> - Product name (required for product analysis and pie charts)</li>
+                <li>• <strong>Sales/Amount</strong> - Sales amount or revenue (required for all calculations)</li>
+                <li>• <strong>Cost</strong> - Cost of goods (optional, for profit analysis)</li>
+                <li>• <strong>Category</strong> - Product category (optional, for grouping)</li>
+                <li>• <strong>Region</strong> - Geographic region (optional, for regional analysis and pie charts)</li>
+                <li>• <strong>Customer</strong> - Customer name (optional, for customer insights)</li>
+              </ul>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                💡 <em>Note: Column names are flexible - the system will auto-detect similar field names.</em>
+              </p>
+            </div>
+          </div>
+        </div>
         
         <form onSubmit={submit} className="space-y-6">
           <div>
