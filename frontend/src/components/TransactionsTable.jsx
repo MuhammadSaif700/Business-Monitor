@@ -6,13 +6,13 @@ export default function TransactionsTable(){
   const [limit, setLimit] = useState(25)
   const [offset, setOffset] = useState(0)
   const [total, setTotal] = useState(0)
-  const [search, setSearch] = useState(localStorage.getItem('tx_search')||'')
+  const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [product, setProduct] = useState(localStorage.getItem('tx_product')||'')
-  const [region, setRegion] = useState(localStorage.getItem('tx_region')||'')
-  const [customer, setCustomer] = useState(localStorage.getItem('tx_customer')||'')
-  const [sortBy, setSortBy] = useState(localStorage.getItem('tx_sort_by')||'date')
-  const [sortDir, setSortDir] = useState(localStorage.getItem('tx_sort_dir')||'desc')
+  const [product, setProduct] = useState('')
+  const [region, setRegion] = useState('')
+  const [customer, setCustomer] = useState('')
+  const [sortBy, setSortBy] = useState('date')
+  const [sortDir, setSortDir] = useState('desc')
   const [totals, setTotals] = useState({page_amount: 0, global_amount: null})
   const [meta, setMeta] = useState({products:[], regions:[], customers:[]})
   // Derived page total amount if backend totals are missing
@@ -35,14 +35,6 @@ export default function TransactionsTable(){
     const t = setTimeout(()=> setDebouncedSearch(search), 300)
     return ()=> clearTimeout(t)
   },[search])
-
-  // persist filters/sort to localStorage
-  useEffect(()=>{ localStorage.setItem('tx_search', search) },[search])
-  useEffect(()=>{ localStorage.setItem('tx_product', product) },[product])
-  useEffect(()=>{ localStorage.setItem('tx_region', region) },[region])
-  useEffect(()=>{ localStorage.setItem('tx_customer', customer) },[customer])
-  useEffect(()=>{ localStorage.setItem('tx_sort_by', sortBy) },[sortBy])
-  useEffect(()=>{ localStorage.setItem('tx_sort_dir', sortDir) },[sortDir])
 
   useEffect(()=>{
     // load distincts for quick filters

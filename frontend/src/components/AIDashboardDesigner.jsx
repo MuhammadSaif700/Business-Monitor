@@ -9,9 +9,7 @@ const LS_KEY = 'ai_dashboard_config'
 
 export default function AIDashboardDesigner(){
   const [prompt, setPrompt] = useState('Create a dashboard with sales over time, top 5 products by amount, and sales share by region.')
-  const [config, setConfig] = useState(()=>{
-    try{ return JSON.parse(localStorage.getItem(LS_KEY)||'null') }catch{ return null }
-  })
+  const [config, setConfig] = useState(null)
   const [preview, setPreview] = useState(null)
   const [aiError, setAiError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -21,8 +19,6 @@ export default function AIDashboardDesigner(){
   const [history, setHistory] = useState([])
 
   useEffect(()=>{ setHistory(getDashboardHistory()) },[])
-
-  useEffect(()=>{ if(config) localStorage.setItem(LS_KEY, JSON.stringify(config)) }, [config])
 
   const generate = async ()=>{
     setLoading(true); setAiError(''); setStatus('Requesting AI config...')
@@ -46,7 +42,7 @@ export default function AIDashboardDesigner(){
       setHistory(addDashboardHistory({ name: preview?.name || (preview?.charts?.[0]?.title || 'Dashboard'), prompt, config: preview }))
     }
   }
-  const clearConfig = ()=>{ setConfig(null); localStorage.removeItem(LS_KEY) }
+  const clearConfig = ()=>{ setConfig(null) }
 
   const testAI = async ()=>{
     setStatus('Testing AI...'); setAiError('')
