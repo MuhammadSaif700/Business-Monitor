@@ -226,6 +226,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://business-monitor.netlify.app",
+        "https://68de84bc26a7ae000891df90--business-monitor.netlify.app",
         "http://localhost:5173", 
         "http://127.0.0.1:5173",
         "http://localhost:5174", 
