@@ -36,9 +36,11 @@ function ChartBlock({spec, params}){
   return (
     <div className="panel p-4">
       <h3 className="font-semibold mb-2">{title}</h3>
+      <div className="h-[300px]">
   {data.kind === 'timeseries' && <SalesLineChart data={{dates: d.dates, amounts: d.values}} options={{xLabel:'Date', yLabel: metric}} />}
   {data.kind === 'pie' && <PieChart items={d.items||[]} />}
-  {data.kind === 'bar' && <BarChart items={d.items||[]} options={{xLabel: spec.group_by}} />}
+  {data.kind === 'bar' && <BarChart items={d.items||[]} />}
+      </div>
     </div>
   )
 }
