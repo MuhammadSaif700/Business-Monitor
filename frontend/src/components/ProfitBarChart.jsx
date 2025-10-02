@@ -21,17 +21,7 @@ export default function ProfitBarChart({items, options={}}){
       tooltip:{ callbacks:{ label:(ctx)=> ` ${ctx.label}: ${ctx.parsed.y.toLocaleString()}` } }
     },
     scales:{
-      x:{
-        title:{display:true,text:options.xLabel||'Product'}, 
-        grid:{color: colors.grid}, 
-        ticks:{
-          color: colors.text, 
-          maxRotation: 45, 
-          minRotation: 0,
-          autoSkip: true,
-          maxTicksLimit: 10
-        }
-      },
+      x:{title:{display:true,text:options.xLabel||'Product'}, grid:{color: colors.grid}, ticks:{color: colors.text, maxRotation: 45, minRotation: 0}},
       y:{
         title:{display:true,text:options.yLabel||'Profit'},
         ticks:{ callback: (v)=> v.toLocaleString(), color: colors.text },

@@ -1791,80 +1791,21 @@ def analytics_query(body: dict = Body(...), _=Depends(require_api_key)):
     end_date = (body or {}).get('end_date')
     filters = (body or {}).get('filters', [])
     top_n = int((body or {}).get('top_n') or 0)
-    
     if not group_by or group_by not in ALLOWED_GROUP_FIELDS:
         raise HTTPException(status_code=400, detail=f'group_by must be one of {sorted(ALLOWED_GROUP_FIELDS)}')
-    
-    # Get the latest uploaded dataset
+    expr = _metric_expr(metric)
+    base = f'SELECT {group_by} AS label, SUM({expr}) AS value FROM transactions WHERE 1=1'
+    params: List = []
+    base, params = _apply_date_and_filters(base, params, start_date, end_date, filters)
+    base += f' GROUP BY {group_by} ORDER BY value DESC'
+    if top_n and top_n > 0:
+        base += ' LIMIT ?'
+        params.append(top_n)
     conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    cursor.execute("""
-    SELECT table_name FROM file_metadata 
-    ORDER BY upload_timestamp DESC LIMIT 1
-    """)
-    result = cursor.fetchone()
-    
-    if not result:
-        table_name = 'transactions'
-    else:
-        table_name = result[0]
-    
-    try:
-        # Read data and find appropriate columns
-        df = pd.read_sql_query(f'SELECT * FROM "{table_name}"', conn)
-        
-        # Find the group_by column (case-insensitive)
-        group_col = None
-        for col in df.columns:
-            if col.lower() == group_by.lower() or group_by.lower() in col.lower():
-                group_col = col
-                break
-        
-        if not group_col:
-            conn.close()
-            return {'items': [], 'metric': metric, 'group_by': group_by}
-        
-        # Apply date filters if date column exists
-        date_col = next((c for c in df.columns if 'date' in c.lower()), None)
-        if date_col:
-            df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
-            if start_date:
-                df = df[df[date_col] >= start_date]
-            if end_date:
-                df = df[df[date_col] <= end_date]
-        
-        # Calculate metric value
-        if metric == 'sum_amount':
-            qty_col = next((c for c in df.columns if 'quantity' in c.lower() or 'qty' in c.lower()), None)
-            price_col = next((c for c in df.columns if 'price' in c.lower() or 'amount' in c.lower()), None)
-            if qty_col and price_col:
-                df['_value'] = pd.to_numeric(df[qty_col], errors='coerce') * pd.to_numeric(df[price_col], errors='coerce')
-            elif price_col:
-                df['_value'] = pd.to_numeric(df[price_col], errors='coerce')
-            else:
-                df['_value'] = 1
-        elif metric == 'sum_quantity':
-            qty_col = next((c for c in df.columns if 'quantity' in c.lower() or 'qty' in c.lower()), None)
-            df['_value'] = pd.to_numeric(df[qty_col], errors='coerce') if qty_col else 1
-        else:  # count
-            df['_value'] = 1
-        
-        # Group and aggregate
-        grouped = df.groupby(group_col)['_value'].sum().reset_index()
-        grouped.columns = ['label', 'value']
-        grouped = grouped.sort_values('value', ascending=False)
-        
-        if top_n and top_n > 0:
-            grouped = grouped.head(top_n)
-        
-        items = grouped.to_dict(orient='records')
-        conn.close()
-        return {'items': items, 'metric': metric, 'group_by': group_by}
-        
-    except Exception as e:
-        conn.close()
-        logger.error(f"Analytics query error: {e}")
-        return {'items': [], 'metric': metric, 'group_by': group_by}
+    df = pd.read_sql_query(base, conn, params=params)
+    conn.close()
+    items = df.to_dict(orient='records') if not df.empty else []
+    return {'items': items, 'metric': metric, 'group_by': group_by}
 
 @app.post('/analytics/timeseries')
 def analytics_timeseries(body: dict = Body(...), _=Depends(require_api_key)):
@@ -1872,70 +1813,17 @@ def analytics_timeseries(body: dict = Body(...), _=Depends(require_api_key)):
     start_date = (body or {}).get('start_date')
     end_date = (body or {}).get('end_date')
     filters = (body or {}).get('filters', [])
-    
-    # Get the latest uploaded dataset
+    expr = _metric_expr(metric)
+    base = f'SELECT date, SUM({expr}) AS value FROM transactions WHERE 1=1'
+    params: List = []
+    base, params = _apply_date_and_filters(base, params, start_date, end_date, filters)
+    base += ' GROUP BY date ORDER BY date ASC'
     conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    cursor.execute("""
-    SELECT table_name FROM file_metadata 
-    ORDER BY upload_timestamp DESC LIMIT 1
-    """)
-    result = cursor.fetchone()
-    
-    if not result:
-        table_name = 'transactions'
-    else:
-        table_name = result[0]
-    
-    try:
-        df = pd.read_sql_query(f'SELECT * FROM "{table_name}"', conn)
-        
-        # Find date column
-        date_col = next((c for c in df.columns if 'date' in c.lower()), None)
-        if not date_col:
-            conn.close()
-            return {'dates': [], 'values': [], 'metric': metric}
-        
-        df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
-        df = df.dropna(subset=[date_col])
-        
-        # Apply date filters
-        if start_date:
-            df = df[df[date_col] >= start_date]
-        if end_date:
-            df = df[df[date_col] <= end_date]
-        
-        # Calculate metric value
-        if metric == 'sum_amount':
-            qty_col = next((c for c in df.columns if 'quantity' in c.lower() or 'qty' in c.lower()), None)
-            price_col = next((c for c in df.columns if 'price' in c.lower() or 'amount' in c.lower()), None)
-            if qty_col and price_col:
-                df['_value'] = pd.to_numeric(df[qty_col], errors='coerce') * pd.to_numeric(df[price_col], errors='coerce')
-            elif price_col:
-                df['_value'] = pd.to_numeric(df[price_col], errors='coerce')
-            else:
-                df['_value'] = 1
-        elif metric == 'sum_quantity':
-            qty_col = next((c for c in df.columns if 'quantity' in c.lower() or 'qty' in c.lower()), None)
-            df['_value'] = pd.to_numeric(df[qty_col], errors='coerce') if qty_col else 1
-        else:  # count
-            df['_value'] = 1
-        
-        # Group by date
-        df['_date'] = df[date_col].dt.date
-        grouped = df.groupby('_date')['_value'].sum().reset_index()
-        grouped = grouped.sort_values('_date')
-        
-        dates = [str(d) for d in grouped['_date'].tolist()]
-        values = grouped['_value'].tolist()
-        
-        conn.close()
-        return {'dates': dates, 'values': values, 'metric': metric}
-        
-    except Exception as e:
-        conn.close()
-        logger.error(f"Analytics timeseries error: {e}")
-        return {'dates': [], 'values': [], 'metric': metric}
+    df = pd.read_sql_query(base, conn, params=params, parse_dates=['date'])
+    conn.close()
+    dates = df['date'].dt.strftime('%Y-%m-%d').tolist() if not df.empty else []
+    values = df['value'].tolist() if not df.empty else []
+    return {'dates': dates, 'values': values, 'metric': metric}
 
 @app.post('/analytics/kpi')
 def analytics_kpi(body: dict = Body(...), _=Depends(require_api_key)):
@@ -1943,56 +1831,14 @@ def analytics_kpi(body: dict = Body(...), _=Depends(require_api_key)):
     start_date = (body or {}).get('start_date')
     end_date = (body or {}).get('end_date')
     filters = (body or {}).get('filters', [])
-    
-    # Get the latest uploaded dataset
+    expr = _metric_expr(metric)
+    base = f'SELECT SUM({expr}) FROM transactions WHERE 1=1'
+    params: List = []
+    base, params = _apply_date_and_filters(base, params, start_date, end_date, filters)
     conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    cursor.execute("""
-    SELECT table_name FROM file_metadata 
-    ORDER BY upload_timestamp DESC LIMIT 1
-    """)
-    result = cursor.fetchone()
-    
-    if not result:
-        table_name = 'transactions'
-    else:
-        table_name = result[0]
-    
-    try:
-        df = pd.read_sql_query(f'SELECT * FROM "{table_name}"', conn)
-        
-        # Apply date filters if date column exists
-        date_col = next((c for c in df.columns if 'date' in c.lower()), None)
-        if date_col:
-            df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
-            if start_date:
-                df = df[df[date_col] >= start_date]
-            if end_date:
-                df = df[df[date_col] <= end_date]
-        
-        # Calculate metric value
-        if metric == 'sum_amount':
-            qty_col = next((c for c in df.columns if 'quantity' in c.lower() or 'qty' in c.lower()), None)
-            price_col = next((c for c in df.columns if 'price' in c.lower() or 'amount' in c.lower()), None)
-            if qty_col and price_col:
-                value = (pd.to_numeric(df[qty_col], errors='coerce') * pd.to_numeric(df[price_col], errors='coerce')).sum()
-            elif price_col:
-                value = pd.to_numeric(df[price_col], errors='coerce').sum()
-            else:
-                value = len(df)
-        elif metric == 'sum_quantity':
-            qty_col = next((c for c in df.columns if 'quantity' in c.lower() or 'qty' in c.lower()), None)
-            value = pd.to_numeric(df[qty_col], errors='coerce').sum() if qty_col else len(df)
-        else:  # count
-            value = len(df)
-        
-        conn.close()
-        return {'value': float(value or 0.0), 'metric': metric}
-        
-    except Exception as e:
-        conn.close()
-        logger.error(f"Analytics KPI error: {e}")
-        return {'value': 0.0, 'metric': metric}
+    val = conn.execute(base, params).fetchone()[0]
+    conn.close()
+    return {'value': float(val or 0.0), 'metric': metric}
 
 @app.post('/ai/dashboard_config')
 def ai_dashboard_config(body: dict = Body(...), _=Depends(require_api_key)):
