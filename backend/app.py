@@ -203,16 +203,8 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     return user
 
 def require_api_key(x_api_key: str = Header(None), user: User = Depends(get_current_user)):
-    """Require API key or valid user authentication"""
-    # Enhanced auth takes precedence
-    if ENHANCED_AUTH and user:
-        return user
-    
-    # Fallback to legacy API key
-    if not BACKEND_API_KEY or os.getenv('PYTEST_CURRENT_TEST'):
-        return True
-    if not x_api_key or x_api_key != BACKEND_API_KEY:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid or missing API Key')
+    """No authentication required - open access"""
+    # Allow all requests without authentication
     return True
 
 def require_auth(user: User = Depends(get_current_user)):

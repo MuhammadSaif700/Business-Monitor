@@ -1,8 +1,6 @@
 import React, {useState, useEffect} from 'react';
-import { setApiToken } from './lib/api';
 import Upload from './components/Upload';
 import Dashboard from './components/Dashboard';
-import SimpleLogin from './components/SimpleLogin';
 import TransactionsTable from './components/TransactionsTable';
 import AIChat from './components/AIChat';
 import CustomDashboard from './components/CustomDashboard';
@@ -16,7 +14,6 @@ import DatasetList from './components/DatasetList';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 
 export default function App(){
-  const [token, setToken] = useState(localStorage.getItem('api_token')||'')
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [theme, setTheme] = useState(()=> localStorage.getItem('theme') || 'light')
   const [showFeedback, setShowFeedback] = useState(false)
@@ -30,43 +27,15 @@ export default function App(){
   },[])
 
   useEffect(()=>{
-    if(token && token.includes('.')){
-      console.warn('Detected JWT token in legacy mode. Clearing stored credentials and requesting re-login.')
-      localStorage.removeItem('api_token')
-      setToken('')
-    }
-  },[token])
-
-  useEffect(()=>{ 
-    console.log('Setting API token:', token)
-    setApiToken(token) 
-  },[token])
-  useEffect(()=>{
     if(theme==='dark') document.documentElement.classList.add('dark'); else document.documentElement.classList.remove('dark')
     localStorage.setItem('theme', theme)
   },[theme])
 
   const toggleTheme = ()=> setTheme(t=> t==='dark' ? 'light' : 'dark')
 
-  // Auto-set demo API key for development if no token exists
-  useEffect(() => {
-    if (!token) {
-      const apiKey = import.meta.env.VITE_API_KEY || '738353'
-      console.log('No token found, setting demo API key for development')
-      setToken(apiKey)
-    }
-  }, [])
-
-  // If no token, show auth form
-  if (!token) {
-    return <SimpleLogin onToken={setToken} />
-  }
-
   return (
     <div className="h-full flex flex-col">
       <Header 
-        token={token} 
-        onLogout={()=>setToken('')} 
         onToggleTheme={toggleTheme} 
         theme={theme} 
         onToggleSidebar={()=>setSidebarOpen(o=>!o)}
@@ -74,7 +43,7 @@ export default function App(){
         onShowFeedback={()=>setShowFeedback(true)}
       />
       <div className="flex flex-1 overflow-hidden relative">
-        <Sidebar token={token} onClose={()=>setSidebarOpen(false)} isOpen={sidebarOpen} />
+        <Sidebar onClose={()=>setSidebarOpen(false)} isOpen={sidebarOpen} />
         {sidebarOpen && <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-30 lg:hidden top-[72px]" onClick={()=>setSidebarOpen(false)} />}
         <main className={`relative z-10 flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin transition-all duration-300 ${
           sidebarOpen ? 'lg:ml-64' : 'ml-0'
@@ -86,8 +55,6 @@ export default function App(){
             <Route path="/upload" element={<div className="space-y-6"><Upload /></div>} />
             <Route path="/datasets" element={<div className="space-y-6"><DatasetList /></div>} />
             <Route path="/transactions" element={<div className="panel p-5"><TransactionsTable /></div>} />
-            <Route path="/profile" element={<UserProfile />} />
-            <Route path="/notifications" element={<div className="max-w-4xl mx-auto"><NotificationCenter /></div>} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/terms-of-service" element={<TermsOfService />} />
             <Route path="/cookies-policy" element={<CookiesPolicy />} />
@@ -99,7 +66,7 @@ export default function App(){
   )
 }
 
-function Header({token,onLogout,onToggleTheme,theme,onToggleSidebar,sidebarOpen,onShowFeedback}){
+function Header({onToggleTheme,theme,onToggleSidebar,sidebarOpen,onShowFeedback}){
   return (
     <header className="top-bar sticky top-0 z-50 bg-white dark:bg-slate-900">
       <div className="top-bar-content max-w-7xl mx-auto">
@@ -133,25 +100,14 @@ function Header({token,onLogout,onToggleTheme,theme,onToggleSidebar,sidebarOpen,
         {/* Right section: Action buttons */}
         <div className="flex items-center gap-3">
           <button onClick={onShowFeedback} className="btn-icon" title="Share feedback">💬</button>
-          <Link to="/notifications" className="btn-icon hidden sm:inline-flex" title="Notifications">🔔</Link>
           <button onClick={onToggleTheme} className="btn-icon" title="Toggle color scheme">{theme==='dark' ? '🌙' : '☀️'}</button>
-          <Link to="/profile" className="profile-chip hidden sm:inline-flex" title="Profile">
-            <span>👤</span>
-            <span className="text-sm font-semibold">Profile</span>
-          </Link>
-          {token && (
-            <>
-              <button onClick={onLogout} className="btn-icon md:hidden" title="Sign out">⏻</button>
-              <button onClick={onLogout} className="btn btn-secondary hidden md:inline-flex">Logout</button>
-            </>
-          )}
         </div>
       </div>
     </header>
   )
 }
 
-function Sidebar({token, onClose, isOpen}){
+function Sidebar({onClose, isOpen}){
   const { pathname } = useLocation()
   return (
     <aside className={`z-40 flex w-72 lg:w-64 flex-col gap-6 px-6 py-6 border-r border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl fixed top-[72px] bottom-0 left-0 overflow-y-auto transition-transform duration-300 ${
@@ -172,10 +128,6 @@ function Sidebar({token, onClose, isOpen}){
       </NavSection>
       <NavSection title="Insights">
         <NavItem icon="✨" label="AI Designer" to="/designer" active={pathname==='/designer'} />
-      </NavSection>
-      <NavSection title="Account">
-        <NavItem icon="👤" label="Profile" to="/profile" active={pathname==='/profile'} />
-        <NavItem icon="🔔" label="Notifications" to="/notifications" active={pathname==='/notifications'} />
       </NavSection>
 
       <div className="mt-auto pt-6 space-y-2 text-xs">
