@@ -239,7 +239,8 @@ app.add_middleware(
         "http://localhost:5182", 
         "http://127.0.0.1:5182",
         "http://localhost:3000",
-        "http://127.0.0.1:3000"
+        "http://127.0.0.1:3000",
+        "https://business-monitor.netlify.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],

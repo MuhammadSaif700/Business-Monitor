@@ -12,7 +12,7 @@ HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_API_KEY')
 HUGGINGFACE_MODEL = os.getenv('HUGGINGFACE_MODEL', 'gpt2')
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 GOOGLE_MODEL = os.getenv('GOOGLE_MODEL', 'gemini-1.5-flash')
-AI_ENABLED = os.getenv('AI_ENABLED', 'false').lower() == 'true'
+AI_ENABLED = os.getenv('AI_ENABLED', 'true').lower() == 'true'
 
 try:
     import openai
