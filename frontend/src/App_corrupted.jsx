@@ -160,23 +160,23 @@ function Sidebar({token, onClose}){
 
       {/* Main Navigation */}
       <nav className="flex-1 space-y-6">
-        <NavSection title="📊 Overview">
-          <NavItem icon="🏠" label="Dashboard" to="/dashboard" active={pathname==='/dashboard' || pathname==='/'} />
+        <NavSection title=" Overview">
+          <NavItem  label="Dashboard" to="/dashboard" active={pathname==='/dashboard' || pathname==='/'} />
         </NavSection>
         
-        <NavSection title="📁 Data Management">
-          <NavItem icon="📤" label="Upload Dataset" to="/upload" active={pathname==='/upload'} />
-          <NavItem icon="🗂️" label="My Datasets" to="/datasets" active={pathname==='/datasets'} />
-          <NavItem icon="📋" label="Transactions" to="/transactions" active={pathname==='/transactions'} />
+        <NavSection title=" Data Management">
+          <NavItem  label="Upload Dataset" to="/upload" active={pathname==='/upload'} />
+          <NavItem  label="My Datasets" to="/datasets" active={pathname==='/datasets'} />
+          <NavItem  label="Transactions" to="/transactions" active={pathname==='/transactions'} />
         </NavSection>
         
-        <NavSection title="🤖 AI Insights">
-          <NavItem icon="✨" label="AI Designer" to="/designer" active={pathname==='/designer'} />
+        <NavSection title=" AI Insights">
+          <NavItem  label="AI Designer" to="/designer" active={pathname==='/designer'} />
         </NavSection>
         
-        <NavSection title="⚙️ Account">
-          <NavItem icon="👤" label="Profile" to="/profile" active={pathname==='/profile'} />
-          <NavItem icon="🔔" label="Notifications" to="/notifications" active={pathname==='/notifications'} />
+        <NavSection title=" Account">
+          <NavItem  label="Profile" to="/profile" active={pathname==='/profile'} />
+          <NavItem  label="Notifications" to="/notifications" active={pathname==='/notifications'} />
         </NavSection>
       </nav>
 
@@ -184,15 +184,15 @@ function Sidebar({token, onClose}){
       <div className="border-t border-slate-200/60 dark:border-slate-700/60 pt-4 space-y-3">
         <div className="grid grid-cols-1 gap-2 text-xs">
           <Link to="/privacy-policy" className="flex items-center gap-2 px-3 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-all duration-200">
-            <span>🔒</span>
+            <span></span>
             <span>Privacy Policy</span>
           </Link>
           <Link to="/terms-of-service" className="flex items-center gap-2 px-3 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-all duration-200">
-            <span>📄</span>
+            <span></span>
             <span>Terms of Service</span>
           </Link>
           <Link to="/cookies-policy" className="flex items-center gap-2 px-3 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-all duration-200">
-            <span>🍪</span>
+            <span></span>
             <span>Cookies Policy</span>
           </Link>
         </div>

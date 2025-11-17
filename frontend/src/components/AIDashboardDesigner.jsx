@@ -65,9 +65,9 @@ export default function AIDashboardDesigner(){
   return (
     <div className="space-y-6">
       <div className="panel p-4 space-y-3">
-        <h2 className="text-lg font-semibold">AI Dashboard Designer</h2>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">AI Dashboard Designer</h2>
         <p className="text-sm text-slate-600 dark:text-slate-300">Describe the dashboard you want. The AI will propose a layout you can preview and apply.</p>
-        <textarea value={prompt} onChange={e=>setPrompt(e.target.value)} rows={3} className="w-full border rounded p-2 font-mono" />
+        <textarea value={prompt} onChange={e=>setPrompt(e.target.value)} rows={3} className="w-full border border-slate-300 dark:border-slate-600 rounded p-2 font-mono bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
         <div className="flex flex-wrap gap-2 items-center">
           <button onClick={generate} className="btn-primary px-3 py-1" disabled={loading}>{loading? 'Thinking…':'Generate'}</button>
           <button onClick={applyConfig} className="btn-secondary px-3 py-1" disabled={!preview}>Apply</button>
@@ -87,26 +87,26 @@ export default function AIDashboardDesigner(){
       </div>
 
       <div className="panel p-4">
-        <div className="flex gap-2 items-center mb-3 text-sm">
+        <div className="flex gap-2 items-center mb-3 text-sm text-slate-700 dark:text-slate-300">
           <label>From</label>
-          <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="border p-1 rounded" />
+          <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="border border-slate-300 dark:border-slate-600 p-1 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
           <label>To</label>
-          <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="border p-1 rounded" />
+          <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="border border-slate-300 dark:border-slate-600 p-1 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
         </div>
         {config ? (
           <AIDashboardRenderer config={config} startDate={startDate} endDate={endDate} />
         ) : (
-          <div className="text-slate-500">No dashboard applied. Use the designer above to generate and apply one.</div>
+          <div className="text-slate-500 dark:text-slate-400">No dashboard applied. Use the designer above to generate and apply one.</div>
         )}
       </div>
 
       {/* History */}
       <div className="panel p-4">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="font-semibold">Saved Dashboards</h3>
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100">Saved Dashboards</h3>
         </div>
         {history.length === 0 ? (
-          <div className="text-sm text-slate-500">No saved dashboards yet.</div>
+          <div className="text-sm text-slate-500 dark:text-slate-400">No saved dashboards yet.</div>
         ) : (
           <ul className="space-y-2">
             {history.map(h => (

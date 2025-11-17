@@ -119,15 +119,15 @@ function Sidebar({onClose, isOpen}){
       </div>
 
       <NavSection title="Overview">
-        <NavItem icon="🏠" label="Dashboard" to="/dashboard" active={pathname=='/dashboard' || pathname==='/'} />
+        <NavItem  label="Dashboard" to="/dashboard" active={pathname=='/dashboard' || pathname==='/'} />
       </NavSection>
       <NavSection title="Data">
-        <NavItem icon="📤" label="Upload" to="/upload" active={pathname==='/upload'} />
-        <NavItem icon="🗂️" label="My Datasets" to="/datasets" active={pathname==='/datasets'} />
-        <NavItem icon="📋" label="Transactions" to="/transactions" active={pathname==='/transactions'} />
+        <NavItem  label="Upload" to="/upload" active={pathname==='/upload'} />
+        <NavItem  label="My Datasets" to="/datasets" active={pathname==='/datasets'} />
+        <NavItem  label="Transactions" to="/transactions" active={pathname==='/transactions'} />
       </NavSection>
       <NavSection title="Insights">
-        <NavItem icon="✨" label="AI Designer" to="/designer" active={pathname==='/designer'} />
+        <NavItem label="AI Designer" to="/designer" active={pathname==='/designer'} />
       </NavSection>
 
       <div className="mt-auto pt-6 space-y-2 text-xs">

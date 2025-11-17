@@ -1670,17 +1670,48 @@ def ai_query(request: Request, query: str = 'most_profitable_product', start_dat
     Supported queries:
     - most_profitable_product
     - sales_over_time
+    - by_region
+    - by_customer
     """
     conn = sqlite3.connect(DATABASE)
-    df = pd.read_sql_query('SELECT * FROM transactions', conn, parse_dates=['date'])
-    conn.close()
+    
+    # Try to get the latest uploaded dataset first, fallback to transactions table
+    try:
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'data_%' ORDER BY name DESC LIMIT 1")
+        result = cursor.fetchone()
+        table_name = result[0] if result else 'transactions'
+    except:
+        table_name = 'transactions'
+    
+    try:
+        df = pd.read_sql_query(f'SELECT * FROM {table_name}', conn, parse_dates=['date'] if 'date' in pd.read_sql_query(f'SELECT * FROM {table_name} LIMIT 0', conn).columns else None)
+    except Exception as e:
+        # Fallback to transactions table if there's an error
+        df = pd.read_sql_query('SELECT * FROM transactions', conn, parse_dates=['date'])
+    finally:
+        conn.close()
 
-    if start_date:
+    if start_date and 'date' in df.columns:
         df = df[df['date'] >= start_date]
-    if end_date:
+    if end_date and 'date' in df.columns:
         df = df[df['date'] <= end_date]
 
-    df['amount'] = df['quantity'] * df['price']
+    # Calculate amount if needed
+    if 'amount' not in df.columns:
+        if 'quantity' in df.columns and 'price' in df.columns:
+            df['amount'] = df['quantity'] * df['price']
+        elif 'sales' in df.columns:
+            df['amount'] = df['sales']
+        elif 'revenue' in df.columns:
+            df['amount'] = df['revenue']
+        else:
+            # Find the first numeric column to use as amount
+            numeric_cols = df.select_dtypes(include=['number']).columns
+            if len(numeric_cols) > 0:
+                df['amount'] = df[numeric_cols[0]]
+            else:
+                # No numeric data found
+                return {'query': query, 'data': [], 'narrative': 'No numeric data found in the dataset.', 'ai_error': None}
 
     if query == 'most_profitable_product':
         # profit per product = sales_amount - purchase_amount
@@ -1695,29 +1726,41 @@ def ai_query(request: Request, query: str = 'most_profitable_product', start_dat
         prompt = (
             "You are a helpful business analyst.\n"
             f"Given these product profits (top 10): {data[:10]}.\n"
-            "Write 3 short insights and one recommendation.\n"
-            "Format as GitHub-Flavored Markdown with this structure:\n"
-            "## Insights\n"
-            "1. ...\n2. ...\n3. ...\n"
-            "\n## Recommendation\n"
-            "- ...\n"
+            "Write 2-3 brief bullet points highlighting key insights.\n"
+            "Keep it concise and actionable."
         )
         narrative, ai_error = _ai_text_or_error(prompt)
         return {'query':query,'data':data,'narrative':narrative, 'ai_error': ai_error}
 
     if query == 'by_region' or query == 'by_customer':
         key = 'region' if query == 'by_region' else 'customer'
+        
+        # Check if the column exists
+        if key not in df.columns:
+            return {
+                'query': query, 
+                'data': [], 
+                'narrative': '',
+                'ai_error': None
+            }
+        
         grouped = df.groupby(key)['amount'].sum().reset_index()
         items = grouped.to_dict(orient='records')
+        
+        # Check if there's actual data
+        if not items or len(items) == 0:
+            return {
+                'query': query, 
+                'data': [], 
+                'narrative': '',
+                'ai_error': None
+            }
+        
         # build a simple prompt
         prompt = (
             "You are a helpful business analyst.\n"
             f"Summarize sales contribution by {key} for the period. Top items: {items[:10]}. Provide two insights.\n"
-            "Format as GitHub-Flavored Markdown with this structure:\n"
-            "## Summary\n"
-            "- ...\n\n"
-            "## Insights\n"
-            "1. ...\n2. ...\n"
+            "Keep it brief and concise - just 2 bullet points."
         )
         narrative, ai_error = _ai_text_or_error(prompt)
         return {'query': query, 'data': items, 'narrative': narrative, 'ai_error': ai_error}
@@ -1728,12 +1771,8 @@ def ai_query(request: Request, query: str = 'most_profitable_product', start_dat
         data = {'dates': times['date'].dt.strftime('%Y-%m-%d').tolist(), 'amounts': times['amount'].tolist()}
         prompt = (
             "You are a helpful business analyst.\n"
-            f"Given this sales time series for the period: {data['dates'][:10]} with amounts {data['amounts'][:10]}, write a concise summary of trends.\n"
-            "Format as GitHub-Flavored Markdown with this structure:\n"
-            "## Trend Summary\n"
-            "- ...\n\n"
-            "## Recommendation\n"
-            "- ...\n"
+            f"Given this sales time series: {data['dates'][:10]} with amounts {data['amounts'][:10]}.\n"
+            "Write 2-3 brief bullet points about the trend and one actionable recommendation."
         ) 
         narrative, ai_error = _ai_text_or_error(prompt)
         return {'query':query,'data':data,'narrative':narrative, 'ai_error': ai_error}
@@ -2120,9 +2159,13 @@ def ai_nl_query(request: Request, body: dict = Body(...), _=Depends(require_api_
     if not intent and ('by customer' in s or 'customer' in s):
         intent = 'by_customer'
     if not intent:
-        # fallback to insight
-        text, ai_error = _ai_text_or_error(prompt)
-        return {'query': 'insight', 'data': None, 'narrative': text, 'ai_error': ai_error}
+        # Provide helpful fallback without verbose AI response
+        return {
+            'query': 'insight', 
+            'data': None, 
+            'narrative': 'I can help you analyze:\n\n- **Most profitable products** - "Which products are most profitable?"\n- **Sales trends** - "Show sales over time"\n- **Regional analysis** - "Sales by region"\n- **Customer analysis** - "Sales by customer"\n\nTry asking one of these questions!',
+            'ai_error': None
+        }
 
     # Execute same path as ai_query
     conn = sqlite3.connect(DATABASE)
@@ -2143,19 +2186,33 @@ def ai_nl_query(request: Request, body: dict = Body(...), _=Depends(require_api_
         data = sorted_df.to_dict(orient='records')
         narrative, ai_error = _ai_text_or_error(
             "You are a helpful business analyst.\n"
-            f"Given product profits (top 10): {data[:10]}, provide 3 insights and 1 recommendation.\n"
-            "Format as GitHub-Flavored Markdown with headings 'Insights' and 'Recommendation' and use a numbered list for insights."
+            f"Given product profits (top 10): {data[:10]}.\n"
+            "Provide 2-3 brief bullet points with key insights. Keep it concise."
         )
         return {'query': intent, 'data': data, 'narrative': narrative, 'ai_error': ai_error}
 
     if intent in ('by_region','by_customer'):
         key = 'region' if intent=='by_region' else 'customer'
+        if key not in df.columns:
+            return {
+                'query': intent, 
+                'data': [], 
+                'narrative': f'No {key} data available in the current dataset.',
+                'ai_error': None
+            }
         grouped = df.groupby(key)['amount'].sum().reset_index()
         items = grouped.to_dict(orient='records')
+        if not items:
+            return {
+                'query': intent, 
+                'data': [], 
+                'narrative': f'No {key} data found for the selected period.',
+                'ai_error': None
+            }
         narrative, ai_error = _ai_text_or_error(
             "You are a helpful business analyst.\n"
             f"Summarize sales contribution by {key}. Top items: {items[:10]}.\n"
-            "Format as GitHub-Flavored Markdown with 'Summary' and 'Insights' sections."
+            "Provide 2-3 brief insights in markdown bullet points."
         )
         return {'query': intent, 'data': items, 'narrative': narrative, 'ai_error': ai_error}
 
@@ -2164,8 +2221,8 @@ def ai_nl_query(request: Request, body: dict = Body(...), _=Depends(require_api_
         data = {'dates': times['date'].dt.strftime('%Y-%m-%d').tolist(), 'amounts': times['amount'].tolist()}
         narrative, ai_error = _ai_text_or_error(
             "You are a helpful business analyst.\n"
-            f"Given sales time series: {data['dates'][:10]} with amounts {data['amounts'][:10]}, summarize trends.\n"
-            "Format as GitHub-Flavored Markdown with 'Trend Summary' and 'Recommendation' sections."
+            f"Given sales time series: {data['dates'][:10]} with amounts {data['amounts'][:10]}.\n"
+            "Provide 2-3 brief bullet points about the trend. Keep it concise."
         )
         return {'query': intent, 'data': data, 'narrative': narrative, 'ai_error': ai_error}
 

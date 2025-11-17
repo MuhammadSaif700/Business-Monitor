@@ -488,7 +488,7 @@ export default function Dashboard(){
             <div className="grid md:grid-cols-2 gap-6">
               <div className="panel p-6 flex flex-col justify-between gap-4">
                 <div>
-                  <h3 className="text-lg font-semibold">📊 Dataset overview</h3>
+                  <h3 className="text-lg font-semibold"> Dataset overview</h3>
                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{activeDataset.original_filename}</p>
                 </div>
                 <div className="bg-slate-50 dark:bg-slate-800/60 rounded-xl p-5 text-center">
@@ -525,7 +525,7 @@ export default function Dashboard(){
                 <div className="mt-6">
                   <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">We found uploaded files on your account. Click to load the latest dataset into this dashboard.</p>
                   <div className="flex justify-center">
-                    <button onClick={() => setAllowAutoLoad(true)} className="btn btn-outline">Load latest dataset</button>
+                    <button onClick={() => setAllowAutoLoad(true)} className="inline-flex items-center justify-center gap-2.5 font-semibold rounded-xl px-6 py-3 text-sm border-2 border-slate-300 dark:border-slate-500 bg-transparent text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-400 dark:hover:border-slate-400 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-500/30 focus:ring-offset-1 transition-all duration-200">Load latest dataset</button>
                   </div>
                 </div>
               )}
@@ -535,14 +535,14 @@ export default function Dashboard(){
           <div className="grid md:grid-cols-2 gap-6">
             <ChartCard
               title="Sales by region"
-              narrative={regionNarrative}
+              narrative={hasRegionData ? regionNarrative : ''}
               error={regionAiError}
               loading={loadingCharts}
               actionLabel="Export CSV"
               actionHref={`${exportBase}/export/by_region?${dateQuery}`}
             >
               {hasRegionData ? (
-                <div className="w-full h-[340px] p-4">
+                <div className="w-full h-[250px]">
                   <PieChart key={document?.documentElement?.classList?.contains('dark') ? 'dark' : 'light'} items={regionData} />
                 </div>
               ) : (
@@ -552,14 +552,14 @@ export default function Dashboard(){
 
             <ChartCard
               title="Sales by customer"
-              narrative={customerNarrative}
+              narrative={hasCustomerData ? customerNarrative : ''}
               error={customerAiError}
               loading={loadingCharts}
               actionLabel="Export CSV"
               actionHref={`${exportBase}/export/by_customer?${dateQuery}`}
             >
               {hasCustomerData ? (
-                <div className="w-full h-[340px] p-4">
+                <div className="w-full h-[250px]">
                   <PieChart key={document?.documentElement?.classList?.contains('dark') ? 'dark' : 'light'} items={customerData} />
                 </div>
               ) : (
@@ -623,9 +623,9 @@ function ChartCard({ title, children, narrative, error, loading, actionLabel, ac
 
 function EmptyChart({ message }) {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-slate-500 dark:text-slate-400">
-      <div className="text-3xl">🧊</div>
-      <p>{message}</p>
+    <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-6 text-center">
+      <div className="text-4xl opacity-30">📊</div>
+      <p className="text-sm text-slate-400 dark:text-slate-500">No data</p>
     </div>
   )
 }
