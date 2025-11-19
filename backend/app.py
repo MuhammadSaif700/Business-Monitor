@@ -1894,12 +1894,22 @@ def ai_query(request: Request, query: str = 'most_profitable_product', start_dat
                 return {'query': query, 'data': [], 'narrative': 'No numeric data found in the dataset.', 'ai_error': None}
 
     if query == 'most_profitable_product':
-        # profit per product = sales_amount - purchase_amount
-        sales = df[df['type'].str.lower()=='sale'].groupby('product')['amount'].sum()
-        purchases = df[df['type'].str.lower()=='purchase'].groupby('product')['amount'].sum()
-        profit = (sales - purchases).fillna(0).reset_index().rename(columns={0:'profit'})
-        profit_df = profit.copy()
-        profit_df.columns = ['product','profit']
+        # profit per product = sales - cost
+        if 'sales' in df.columns and 'cost' in df.columns and 'product' in df.columns:
+            # New schema: sales and cost columns
+            profit = df.groupby('product').agg({'sales': 'sum', 'cost': 'sum'}).reset_index()
+            profit['profit'] = profit['sales'] - profit['cost']
+            profit_df = profit[['product', 'profit']].copy()
+        elif 'type' in df.columns and 'amount' in df.columns and 'product' in df.columns:
+            # Old schema: type and amount columns
+            sales = df[df['type'].str.lower()=='sale'].groupby('product')['amount'].sum()
+            purchases = df[df['type'].str.lower()=='purchase'].groupby('product')['amount'].sum()
+            profit = (sales - purchases).fillna(0).reset_index().rename(columns={0:'profit'})
+            profit_df = profit.copy()
+            profit_df.columns = ['product','profit']
+        else:
+            return {'query': query, 'data': [], 'narrative': 'Product or amount columns not found.', 'ai_error': None}
+        
         sorted_df = profit_df.sort_values('profit', ascending=False).reset_index(drop=True)
         data = sorted_df.to_dict(orient='records')
         # Generate narrative (ask for clean Markdown formatting)
@@ -1924,7 +1934,22 @@ def ai_query(request: Request, query: str = 'most_profitable_product', start_dat
                 'ai_error': None
             }
         
-        grouped = df.groupby(key)['amount'].sum().reset_index()
+        # Determine which amount column to use
+        amount_col = None
+        if 'sales' in df.columns:
+            amount_col = 'sales'
+        elif 'amount' in df.columns:
+            amount_col = 'amount'
+        else:
+            return {
+                'query': query, 
+                'data': [], 
+                'narrative': 'No sales or amount column found.',
+                'ai_error': None
+            }
+        
+        grouped = df.groupby(key)[amount_col].sum().reset_index()
+        grouped.columns = [key, 'amount']  # Normalize column name
         items = grouped.to_dict(orient='records')
         
         # Check if there's actual data
@@ -1946,9 +1971,19 @@ def ai_query(request: Request, query: str = 'most_profitable_product', start_dat
         return {'query': query, 'data': items, 'narrative': narrative, 'ai_error': ai_error}
 
     if query == 'sales_over_time':
-        times = df[df['type'].str.lower()=='sale'].groupby('date')['amount'].sum().reset_index()
-        times = times.sort_values('date')
-        data = {'dates': times['date'].dt.strftime('%Y-%m-%d').tolist(), 'amounts': times['amount'].tolist()}
+        if 'sales' in df.columns and 'date' in df.columns:
+            # New schema: sales column
+            times = df.groupby('date')['sales'].sum().reset_index()
+            times = times.sort_values('date')
+            data = {'dates': times['date'].dt.strftime('%Y-%m-%d').tolist(), 'amounts': times['sales'].tolist()}
+        elif 'type' in df.columns and 'amount' in df.columns and 'date' in df.columns:
+            # Old schema: type and amount columns
+            times = df[df['type'].str.lower()=='sale'].groupby('date')['amount'].sum().reset_index()
+            times = times.sort_values('date')
+            data = {'dates': times['date'].dt.strftime('%Y-%m-%d').tolist(), 'amounts': times['amount'].tolist()}
+        else:
+            return {'query': query, 'data': {'dates': [], 'amounts': []}, 'narrative': 'Date or sales columns not found.', 'ai_error': None}
+        
         prompt = (
             "You are a helpful business analyst.\n"
             f"Given this sales time series: {data['dates'][:10]} with amounts {data['amounts'][:10]}.\n"
