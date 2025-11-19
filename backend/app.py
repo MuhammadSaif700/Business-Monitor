@@ -321,6 +321,64 @@ def root():
 def health():
     return {"status": "ok"}
 
+@app.get('/debug/database-info')
+def debug_database_info():
+    """Debug endpoint to check database state and uploaded data"""
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        
+        # Get all data tables
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'data_%' ORDER BY name DESC")
+        tables = [row[0] for row in cursor.fetchall()]
+        
+        info = {
+            'database_path': DATABASE,
+            'database_exists': os.path.exists(DATABASE),
+            'database_size_mb': round(os.path.getsize(DATABASE) / (1024 * 1024), 2) if os.path.exists(DATABASE) else 0,
+            'total_data_tables': len(tables),
+            'tables': tables[:10],  # Show first 10
+            'datasets': []
+        }
+        
+        # Check each table's structure
+        for table in tables[:5]:  # Check first 5
+            cursor.execute(f"PRAGMA table_info({table})")
+            columns = [row[1] for row in cursor.fetchall()]
+            
+            cursor.execute(f"SELECT COUNT(*) FROM {table}")
+            row_count = cursor.fetchone()[0]
+            
+            dataset_info = {
+                'table': table,
+                'columns': columns,
+                'row_count': row_count,
+                'has_region': 'region' in columns,
+                'has_customer': 'customer' in columns,
+                'has_sales': 'sales' in columns or 'amount' in columns
+            }
+            
+            # Get sample region data if available
+            if 'region' in columns:
+                amount_col = 'sales' if 'sales' in columns else ('amount' if 'amount' in columns else None)
+                if amount_col:
+                    cursor.execute(f"SELECT region, COUNT(*), SUM({amount_col}) FROM {table} GROUP BY region")
+                    dataset_info['region_summary'] = [
+                        {'region': row[0], 'count': row[1], 'total': float(row[2]) if row[2] else 0}
+                        for row in cursor.fetchall()
+                    ]
+            
+            info['datasets'].append(dataset_info)
+        
+        conn.close()
+        return info
+    except Exception as e:
+        return {
+            'error': str(e),
+            'database_path': DATABASE,
+            'database_exists': os.path.exists(DATABASE) if DATABASE else False
+        }
+
 @app.get('/readyz')
 def readyz():
     try:
