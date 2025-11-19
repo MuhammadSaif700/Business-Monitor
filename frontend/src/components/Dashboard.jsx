@@ -325,11 +325,10 @@ export default function Dashboard(){
         <div className="flex flex-wrap items-start gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Date range</p>
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Focus on the period that matters</h3>
           </div>
           {activeDataset && (
             <div className="ml-auto flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 dark:border-blue-500/30 dark:bg-blue-500/10">
-              <div className="text-2xl">📁</div>
+              <div className="text-2xl"></div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-blue-700 dark:text-blue-200 font-semibold">Active dataset</p>
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-100">{activeDataset.original_filename}</p>
@@ -492,13 +491,13 @@ export default function Dashboard(){
                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{activeDataset.original_filename}</p>
                 </div>
                 <div className="bg-slate-50 dark:bg-slate-800/60 rounded-xl p-5 text-center">
-                  <p className="text-4xl mb-2">📁</p>
+                  <p className="text-4xl mb-2"></p>
                   <p className="text-sm text-slate-500 dark:text-slate-400">{activeDataset.row_count?.toLocaleString()} rows • {activeDataset.columns?.length || 0} columns</p>
                 </div>
                 <Link to={`/datasets?table=${activeDataset.table_name}`} className="btn btn-primary self-start">View full analytics</Link>
               </div>
               <div className="panel p-6">
-                <h3 className="text-lg font-semibold mb-4">🔍 Column highlights</h3>
+                <h3 className="text-lg font-semibold mb-4"> Column highlights</h3>
                 <div className="grid grid-cols-2 gap-2">
                   {(activeDataset.columns || []).slice(0, 10).map((column, index) => (
                     <div key={index} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-800/60 px-3 py-2 text-sm text-slate-600 dark:text-slate-300">
@@ -513,12 +512,12 @@ export default function Dashboard(){
             </div>
           ) : (
             <div className="panel p-10 text-center">
-              <div className="text-6xl mb-4">📊</div>
+              <div className="text-6xl mb-4"></div>
               <h3 className="text-2xl font-semibold mb-3">No insights yet</h3>
               <p className="text-slate-600 dark:text-slate-400 mb-6">Upload any type of file to instantly generate dashboards tailored to your data.</p>
               <div className="flex flex-wrap gap-3 justify-center">
-                <Link to="/upload" className="btn btn-primary">📤 Upload a file</Link>
-                <Link to="/designer" className="btn btn-secondary">🤖 Try AI Designer</Link>
+                <Link to="/upload" className="btn btn-primary"> Upload a file</Link>
+                <Link to="/designer" className="btn btn-secondary"> Try AI Designer</Link>
               </div>
               {/* If there are existing files on the server, offer a one-click option to load them */}
               {datasets && datasets.length > 0 && !allowAutoLoad && (
@@ -624,7 +623,7 @@ function ChartCard({ title, children, narrative, error, loading, actionLabel, ac
 function EmptyChart({ message }) {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-6 text-center">
-      <div className="text-4xl opacity-30">📊</div>
+      <div className="text-4xl opacity-30"></div>
       <p className="text-sm text-slate-400 dark:text-slate-500">No data</p>
     </div>
   )
