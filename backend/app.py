@@ -769,6 +769,186 @@ def export_upload_errors_csv():
     return Response(content=LAST_UPLOAD_ERROR_CSV, media_type='text/csv', headers=headers)
 
 
+@app.get('/reports/income-statement')
+def get_income_statement(start_date: str = None, end_date: str = None, _=Depends(require_api_key)):
+    """Generate income statement (profit & loss) report"""
+    conn = sqlite3.connect(DATABASE)
+    
+    # Try to get the latest uploaded dataset first
+    try:
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'data_%' ORDER BY name DESC LIMIT 1")
+        result = cursor.fetchone()
+        table_name = result[0] if result else 'transactions'
+    except:
+        table_name = 'transactions'
+    
+    try:
+        df = pd.read_sql_query(f'SELECT * FROM {table_name}', conn, parse_dates=['date'] if 'date' in pd.read_sql_query(f'SELECT * FROM {table_name} LIMIT 0', conn).columns else None)
+    except:
+        df = pd.read_sql_query('SELECT * FROM transactions', conn, parse_dates=['date'])
+    finally:
+        conn.close()
+    
+    # Apply date filters
+    if 'date' in df.columns:
+        if start_date:
+            df = df[df['date'] >= start_date]
+        if end_date:
+            df = df[df['date'] <= end_date]
+    
+    # Calculate amount if needed
+    if 'amount' not in df.columns:
+        if 'quantity' in df.columns and 'price' in df.columns:
+            df['amount'] = df['quantity'] * df['price']
+        elif 'sales' in df.columns:
+            df['amount'] = df['sales']
+        else:
+            numeric_cols = df.select_dtypes(include=['number']).columns
+            if len(numeric_cols) > 0:
+                df['amount'] = df[numeric_cols[0]]
+            else:
+                return {'revenue': 0, 'cogs': 0, 'gross_profit': 0, 'operating_expenses': 0, 'net_income': 0, 'narrative': 'No numeric data found', 'ai_error': None}
+    
+    # Calculate income statement items
+    revenue = 0
+    cogs = 0
+    
+    if 'type' in df.columns:
+        revenue = df[df['type'].str.lower() == 'sale']['amount'].sum()
+        cogs = df[df['type'].str.lower() == 'purchase']['amount'].sum()
+    else:
+        # If no type column, treat positive as revenue
+        revenue = df[df['amount'] > 0]['amount'].sum()
+        cogs = abs(df[df['amount'] < 0]['amount'].sum())
+    
+    gross_profit = revenue - cogs
+    gross_margin = (gross_profit / revenue * 100) if revenue > 0 else 0
+    
+    # For now, operating expenses are assumed to be 0 (can be expanded with more data)
+    operating_expenses = 0
+    operating_income = gross_profit - operating_expenses
+    net_income = operating_income
+    
+    # Generate AI insights using Gemini
+    prompt = (
+        "You are a financial analyst reviewing an income statement.\n"
+        f"Revenue: ${revenue:,.2f}\n"
+        f"Cost of Goods Sold: ${cogs:,.2f}\n"
+        f"Gross Profit: ${gross_profit:,.2f} ({gross_margin:.1f}% margin)\n"
+        f"Net Income: ${net_income:,.2f}\n\n"
+        "Provide 3-4 brief bullet points analyzing this financial performance and suggest one actionable recommendation.\n"
+        "Keep it concise and business-focused."
+    )
+    narrative, ai_error = _ai_text_or_error(prompt)
+    
+    return {
+        'revenue': float(revenue),
+        'cogs': float(cogs),
+        'gross_profit': float(gross_profit),
+        'gross_margin': float(gross_margin),
+        'operating_expenses': float(operating_expenses),
+        'operating_income': float(operating_income),
+        'net_income': float(net_income),
+        'narrative': narrative,
+        'ai_error': ai_error
+    }
+
+@app.get('/reports/balance-sheet')
+def get_balance_sheet(as_of_date: str = None, _=Depends(require_api_key)):
+    """Generate balance sheet report"""
+    conn = sqlite3.connect(DATABASE)
+    
+    # Try to get the latest uploaded dataset first
+    try:
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'data_%' ORDER BY name DESC LIMIT 1")
+        result = cursor.fetchone()
+        table_name = result[0] if result else 'transactions'
+    except:
+        table_name = 'transactions'
+    
+    try:
+        df = pd.read_sql_query(f'SELECT * FROM {table_name}', conn, parse_dates=['date'] if 'date' in pd.read_sql_query(f'SELECT * FROM {table_name} LIMIT 0', conn).columns else None)
+    except:
+        df = pd.read_sql_query('SELECT * FROM transactions', conn, parse_dates=['date'])
+    finally:
+        conn.close()
+    
+    # Apply date filter (as of date)
+    if as_of_date and 'date' in df.columns:
+        df = df[df['date'] <= as_of_date]
+    
+    # Calculate amount if needed
+    if 'amount' not in df.columns:
+        if 'quantity' in df.columns and 'price' in df.columns:
+            df['amount'] = df['quantity'] * df['price']
+        elif 'sales' in df.columns:
+            df['amount'] = df['sales']
+        else:
+            numeric_cols = df.select_dtypes(include=['number']).columns
+            if len(numeric_cols) > 0:
+                df['amount'] = df[numeric_cols[0]]
+            else:
+                return {
+                    'assets': {'cash': 0, 'inventory': 0, 'total': 0},
+                    'liabilities': {'accounts_payable': 0, 'total': 0},
+                    'equity': {'retained_earnings': 0, 'total': 0},
+                    'narrative': 'No numeric data found',
+                    'ai_error': None
+                }
+    
+    # Calculate balance sheet items
+    if 'type' in df.columns:
+        revenue = df[df['type'].str.lower() == 'sale']['amount'].sum()
+        purchases = df[df['type'].str.lower() == 'purchase']['amount'].sum()
+    else:
+        revenue = df[df['amount'] > 0]['amount'].sum()
+        purchases = abs(df[df['amount'] < 0]['amount'].sum())
+    
+    # Assets
+    cash = revenue - purchases  # Simplified: net cash from operations
+    inventory = purchases * 0.3  # Simplified: assume 30% of purchases remain as inventory
+    total_assets = cash + inventory
+    
+    # Liabilities
+    accounts_payable = purchases * 0.2  # Simplified: assume 20% of purchases unpaid
+    total_liabilities = accounts_payable
+    
+    # Equity
+    retained_earnings = total_assets - total_liabilities
+    total_equity = retained_earnings
+    
+    # Generate AI insights using Gemini
+    prompt = (
+        "You are a financial analyst reviewing a balance sheet.\n"
+        f"Total Assets: ${total_assets:,.2f}\n"
+        f"  - Cash: ${cash:,.2f}\n"
+        f"  - Inventory: ${inventory:,.2f}\n"
+        f"Total Liabilities: ${total_liabilities:,.2f}\n"
+        f"Total Equity: ${total_equity:,.2f}\n"
+        f"Debt-to-Equity Ratio: {(total_liabilities/total_equity if total_equity > 0 else 0):.2f}\n\n"
+        "Provide 3-4 brief bullet points analyzing the financial position and liquidity. Suggest one recommendation.\n"
+        "Keep it concise and business-focused."
+    )
+    narrative, ai_error = _ai_text_or_error(prompt)
+    
+    return {
+        'assets': {
+            'cash': float(cash),
+            'inventory': float(inventory),
+            'total': float(total_assets)
+        },
+        'liabilities': {
+            'accounts_payable': float(accounts_payable),
+            'total': float(total_liabilities)
+        },
+        'equity': {
+            'retained_earnings': float(retained_earnings),
+            'total': float(total_equity)
+        },
+        'narrative': narrative,
+        'ai_error': ai_error
+    }
+
 @app.post('/auth/token')
 def auth_token(body: dict = Body(...)):
     password = body.get('password')

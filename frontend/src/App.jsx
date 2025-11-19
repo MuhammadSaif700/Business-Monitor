@@ -11,6 +11,8 @@ import TermsOfService from './components/TermsOfService';
 import CookiesPolicy from './components/CookiesPolicy';
 import NotificationCenter from './components/NotificationCenter';
 import DatasetList from './components/DatasetList';
+import IncomeStatement from './components/IncomeStatement';
+import BalanceSheet from './components/BalanceSheet';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 
 export default function App(){
@@ -55,6 +57,8 @@ export default function App(){
             <Route path="/upload" element={<div className="space-y-6"><Upload /></div>} />
             <Route path="/datasets" element={<div className="space-y-6"><DatasetList /></div>} />
             <Route path="/transactions" element={<div className="panel p-5"><TransactionsTable /></div>} />
+            <Route path="/income-statement" element={<IncomeStatement />} />
+            <Route path="/balance-sheet" element={<BalanceSheet />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/terms-of-service" element={<TermsOfService />} />
             <Route path="/cookies-policy" element={<CookiesPolicy />} />
@@ -128,6 +132,10 @@ function Sidebar({onClose, isOpen}){
       </NavSection>
       <NavSection title="Insights">
         <NavItem label="AI Designer" to="/designer" active={pathname==='/designer'} />
+      </NavSection>
+      <NavSection title="Reports">
+        <NavItem label="Income Statement" to="/income-statement" active={pathname==='/income-statement'} />
+        <NavItem label="Balance Sheet" to="/balance-sheet" active={pathname==='/balance-sheet'} />
       </NavSection>
 
       <div className="mt-auto pt-6 space-y-2 text-xs">
