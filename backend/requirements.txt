@@ -12,6 +12,5 @@ jinja2
 PyJWT
 prometheus-client
 sentry-sdk
-google-generativeai
 bcrypt
 email-validator

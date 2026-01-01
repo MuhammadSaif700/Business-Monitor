@@ -887,7 +887,7 @@ def get_income_statement(start_date: str = None, end_date: str = None, _=Depends
     operating_income = gross_profit - operating_expenses
     net_income = operating_income
     
-    # Generate AI insights using Gemini
+    # Generate AI insights using Perplexity
     prompt = (
         "You are a financial analyst reviewing an income statement.\n"
         f"Revenue: ${revenue:,.2f}\n"
@@ -975,7 +975,7 @@ def get_balance_sheet(as_of_date: str = None, _=Depends(require_api_key)):
     retained_earnings = total_assets - total_liabilities
     total_equity = retained_earnings
     
-    # Generate AI insights using Gemini
+    # Generate AI insights using Perplexity
     prompt = (
         "You are a financial analyst reviewing a balance sheet.\n"
         f"Total Assets: ${total_assets:,.2f}\n"
@@ -1836,9 +1836,9 @@ def meta_distincts(start_date: Optional[str] = None, end_date: Optional[str] = N
     return {'products': products, 'regions': regions, 'customers': customers}
 
 try:
-    from .ai_service import generate_text, test_google_key
+    from .ai_service import generate_text, test_perplexity_key
 except ImportError:  # support module execution
-    from ai_service import generate_text, test_google_key
+    from ai_service import generate_text, test_perplexity_key
 
 
 def _ai_text_or_error(prompt: str) -> Tuple[str, Optional[str]]:
@@ -1857,7 +1857,7 @@ def _ai_text_or_error(prompt: str) -> Tuple[str, Optional[str]]:
         if '429' in s or 'quota' in s_lower:
             return "", 'AI quota exceeded. Please add billing or try again later.'
         if '404' in s and 'model' in s_lower:
-            return "", 'AI model not accessible for this key. Try a different GOOGLE_MODEL.'
+            return "", 'AI model not accessible for this key. Try a different PERPLEXITY_MODEL.'
         return "", 'AI provider error. See /ai/test for details.'
     if s_lower.startswith('(ai disabled)'):
         return "", 'AI is disabled on the server.'
@@ -1875,11 +1875,11 @@ def ai_insight(request: Request, summary: str = "", _=Depends(require_api_key)):
 
 @app.get('/ai/test')
 def ai_test(_=Depends(require_api_key)):
-    """Check AI provider health; currently verifies Google key when enabled.
+    """Check AI provider health; currently verifies Perplexity key when enabled.
     Returns {'status': 'ok'} or {'status':'error','detail':...}
     """
     try:
-        res = test_google_key()
+        res = test_perplexity_key()
         # Accept either 'ok' or 'ok:<model>' formats from the checker
         if isinstance(res, str):
             lower = res.lower()

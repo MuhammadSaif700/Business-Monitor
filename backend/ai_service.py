@@ -10,8 +10,8 @@ load_dotenv(dotenv_path=str(ENV_PATH), encoding='utf-8')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_API_KEY')
 HUGGINGFACE_MODEL = os.getenv('HUGGINGFACE_MODEL', 'gpt2')
-GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
-GOOGLE_MODEL = os.getenv('GOOGLE_MODEL', 'gemini-1.5-flash')
+PERPLEXITY_API_KEY = os.getenv('PERPLEXITY_API_KEY')
+PERPLEXITY_MODEL = os.getenv('PERPLEXITY_MODEL', 'sonar-pro')
 AI_ENABLED = os.getenv('AI_ENABLED', 'true').lower() == 'true'
 
 try:
@@ -20,14 +20,6 @@ try:
         openai.api_key = OPENAI_API_KEY
 except Exception:
     openai = None
-
-# Optional Google Generative AI (Gemini)
-try:
-    import google.generativeai as genai  # type: ignore
-    if GOOGLE_API_KEY:
-        genai.configure(api_key=GOOGLE_API_KEY)
-except Exception:
-    genai = None
 
 
 def generate_text(prompt: str, max_tokens: int = 150) -> str:
@@ -50,32 +42,33 @@ def generate_text(prompt: str, max_tokens: int = 150) -> str:
         except Exception as e:
             return f"AI request failed (OpenAI): {e}"
 
-    # Google Generative AI (Gemini)
-    if GOOGLE_API_KEY and genai is not None:
-        # Try configured model first, then sensible fallbacks
-        # Use currently available models as of 2025
-        candidates = [
-            GOOGLE_MODEL,
-            'models/gemini-2.0-flash',
-            'models/gemini-2.5-flash',
-            'models/gemini-flash-latest',
-            'models/gemini-pro-latest',
-        ]
-        seen = set()
-        errors = []
-        for m in candidates:
-            if not m or m in seen:
-                continue
-            seen.add(m)
-            try:
-                model = genai.GenerativeModel(m)
-                r = model.generate_content(prompt)
-                text = (getattr(r, 'text', None) or str(r)).strip()
-                if text:
-                    return text
-            except Exception as e:
-                errors.append(f"{m}: {e}")
-        return "AI request failed (Google): " + " | ".join(errors[:3])
+    # Perplexity AI
+    if PERPLEXITY_API_KEY:
+        try:
+            url = "https://api.perplexity.ai/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "model": PERPLEXITY_MODEL,
+                "messages": [
+                    {"role": "system", "content": "You are a helpful business analyst."},
+                    {"role": "user", "content": prompt}
+                ],
+                "max_tokens": max_tokens,
+                "temperature": 0.6
+            }
+            r = requests.post(url, headers=headers, json=data, timeout=30)
+            if r.status_code == 200:
+                res = r.json()
+                if 'choices' in res and len(res['choices']) > 0:
+                    return res['choices'][0]['message']['content'].strip()
+                return f"AI request failed (Perplexity): Unexpected response format"
+            else:
+                return f"AI request failed (Perplexity): {r.status_code} {r.text}"
+        except Exception as e:
+            return f"AI request failed (Perplexity): {e}"
 
     if HUGGINGFACE_API_KEY:
         try:
@@ -100,39 +93,36 @@ def generate_text(prompt: str, max_tokens: int = 150) -> str:
         except Exception as e:
             return f"AI request failed (HuggingFace): {e}"
 
-    return "(AI disabled) Add OPENAI_API_KEY or HUGGINGFACE_API_KEY to .env to enable AI-generated insights."
+    return "(AI disabled) Add PERPLEXITY_API_KEY, OPENAI_API_KEY or HUGGINGFACE_API_KEY to .env to enable AI-generated insights."
 
-def test_google_key() -> str:
-    """Return 'ok:<model>' if Google API key works with any supported model, or 'error: <detail>'.
+def test_perplexity_key() -> str:
+    """Return 'ok:<model>' if Perplexity API key works, or 'error: <detail>'.
     Does not log or echo the key.
     """
     if not AI_ENABLED:
         return "AI disabled"
-    if not GOOGLE_API_KEY:
-        return "No GOOGLE_API_KEY configured"
-    if genai is None:
-        return "google-generativeai not installed"
-    candidates = [
-        GOOGLE_MODEL,
-        'models/gemini-2.0-flash',
-        'models/gemini-2.5-flash',
-        'models/gemini-flash-latest',
-        'models/gemini-pro-latest',
-    ]
-    seen = set()
-    errors = []
-    for m in candidates:
-        if not m or m in seen:
-            continue
-        seen.add(m)
-        try:
-            model = genai.GenerativeModel(m)
-            r = model.generate_content("ping")
-            _ = getattr(r, 'text', '')
-            return f"ok:{m}"
-        except Exception as e:
-            errors.append(f"{m}: {e}")
-    return "error: " + " | ".join(errors[:3])
+    if not PERPLEXITY_API_KEY:
+        return "No PERPLEXITY_API_KEY configured"
+    try:
+        url = "https://api.perplexity.ai/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": PERPLEXITY_MODEL,
+            "messages": [
+                {"role": "user", "content": "ping"}
+            ],
+            "max_tokens": 10
+        }
+        r = requests.post(url, headers=headers, json=data, timeout=10)
+        if r.status_code == 200:
+            return f"ok:{PERPLEXITY_MODEL}"
+        else:
+            return f"error: {r.status_code} {r.text[:100]}"
+    except Exception as e:
+        return f"error: {e}"
 
 
 def build_insight_prompt_for_profits(items):

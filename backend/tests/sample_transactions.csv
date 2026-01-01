@@ -1,6 +1,0 @@
-date,type,product,quantity,price,customer,region
-2025-09-01,sale,Beef,10,20,Hotel A,North
-2025-09-02,sale,Beef,5,22,Hotel B,North
-2025-09-03,purchase,Beef,30,12,Supplier X,North
-2025-09-04,sale,Chicken,8,10,Restaurant A,South
-2025-09-05,purchase,Chicken,50,6,Supplier Y,South
